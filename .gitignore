@@ -1,5 +1,5 @@
 # Mobile app (React Native) — excluded from this repo
-app/
+/app/
 
 # Dependencies
 node_modules/
