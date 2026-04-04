@@ -26,6 +26,21 @@ import type { Category, Account, TransactionDraft } from "@/lib/types";
 type Tab = "ai" | "manual";
 type InputMode = "text" | "image" | "audio";
 
+interface SREvent {
+  resultIndex: number;
+  results: Array<{ isFinal: boolean; 0: { transcript: string } }>;
+}
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((event: SREvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: (() => void) | null;
+}
+
 // ─── Shared save helper ───────────────────────────────────────────────────────
 async function saveTransaction(
   supabase: ReturnType<typeof createClient>,
@@ -220,7 +235,7 @@ function AIForm({
   // Audio
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const recognitionRef = useRef<InstanceType<typeof window.SpeechRecognition> | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   // Draft
   const [loading, setLoading] = useState(false);
@@ -254,16 +269,7 @@ function AIForm({
       return;
     }
 
-    type SpeechRecognitionCtor = new () => {
-      lang: string;
-      continuous: boolean;
-      interimResults: boolean;
-      start(): void;
-      stop(): void;
-      onresult: ((event: SpeechRecognitionEvent) => void) | null;
-      onerror: ((event: Event) => void) | null;
-      onend: (() => void) | null;
-    };
+    type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
     const w = window as Window & {
       SpeechRecognition?: SpeechRecognitionCtor;
       webkitSpeechRecognition?: SpeechRecognitionCtor;
@@ -282,7 +288,7 @@ function AIForm({
 
     let finalText = "";
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: SREvent) => {
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {

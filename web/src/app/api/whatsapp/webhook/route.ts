@@ -166,7 +166,7 @@ async function getUserContext(userId: string, currency: string) {
   const catMap: Record<string, number> = {};
   for (const t of monthTxs ?? []) {
     if (t.type === "expense") {
-      const name = (t.categories as { name: string } | null)?.name ?? "Sin categoría";
+      const name = (t.categories as unknown as { name: string } | null)?.name ?? "Sin categoría";
       catMap[name] = (catMap[name] ?? 0) + t.amount;
     }
   }
@@ -178,7 +178,7 @@ async function getUserContext(userId: string, currency: string) {
 
   const recentStr = (recentTxs ?? [])
     .map((t) => {
-      const cat = (t.categories as { name: string } | null)?.name ?? "";
+      const cat = (t.categories as unknown as { name: string } | null)?.name ?? "";
       const sign = t.type === "income" ? "+" : "-";
       return `${sign}${t.currency} ${t.amount} ${t.merchant ?? cat} (${t.date?.split("T")[0] ?? ""})`;
     })
@@ -186,7 +186,7 @@ async function getUserContext(userId: string, currency: string) {
 
   const budgetStr = (budgets ?? [])
     .map((b) => {
-      const cat = (b.categories as { name: string } | null)?.name ?? "Sin cat";
+      const cat = (b.categories as unknown as { name: string } | null)?.name ?? "Sin cat";
       return `${cat}: límite ${b.currency} ${b.amount}`;
     })
     .join(", ");
