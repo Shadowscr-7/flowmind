@@ -220,7 +220,7 @@ function AIForm({
   // Audio
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<InstanceType<typeof window.SpeechRecognition> | null>(null);
 
   // Draft
   const [loading, setLoading] = useState(false);
@@ -254,8 +254,21 @@ function AIForm({
       return;
     }
 
-    const SR = (window as Window & typeof globalThis).SpeechRecognition ||
-      (window as Window & typeof globalThis & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+    type SpeechRecognitionCtor = new () => {
+      lang: string;
+      continuous: boolean;
+      interimResults: boolean;
+      start(): void;
+      stop(): void;
+      onresult: ((event: SpeechRecognitionEvent) => void) | null;
+      onerror: ((event: Event) => void) | null;
+      onend: (() => void) | null;
+    };
+    const w = window as Window & {
+      SpeechRecognition?: SpeechRecognitionCtor;
+      webkitSpeechRecognition?: SpeechRecognitionCtor;
+    };
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
 
     if (!SR) {
       onError("Tu navegador no soporta reconocimiento de voz. Usá Chrome o Edge.");
