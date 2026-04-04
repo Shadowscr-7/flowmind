@@ -1,0 +1,84 @@
+# Flowmind — Pendientes Pre-Launch
+
+> Actualizado: 7 de marzo de 2026 — Pre-launch **100%** ✅ — Features futuras **7/8** ✅
+
+---
+
+## � ACCIÓN MANUAL REQUERIDA (prioritario)
+
+- [ ] **Hostear `public/privacy-policy.html` en una URL pública** — Opciones: GitHub Pages, Firebase Hosting, Vercel, Netlify. Una vez hosteada, pegar la URL en Google Play Console → Policy → App content → Privacy policy.
+
+---
+
+## �🔴 BLOQUEANTES para Google Play
+
+- [x] **1. Política de Privacidad** — `public/privacy-policy.html` ✅
+- [x] **2. Data Safety Declaration** — Guía completa en `DATA_SAFETY_GUIDE.md` ✅
+- [x] **3. Build AAB** — `deploy.cmd` actualizado con opción AAB + `--dart-define-from-file=.env` ✅
+- [x] **4. RevenueCat test key** — Eliminado `defaultValue` test. Ahora falla si no se pasa `REVENUECAT_API_KEY` en `.env` ✅
+- [x] **5. `android:label`** — Cambiado a `"Flowmind"` en AndroidManifest.xml ✅
+- [x] **6. Ícono de la app** — Generado desde `assets/images/icono.png` con `flutter_launcher_icons` (adaptive icon) ✅
+- [x] **7. ProGuard/R8** — Configurado `isMinifyEnabled`, `isShrinkResources` y `proguard-rules.pro` ✅
+
+---
+
+## 🔒 Seguridad CRÍTICA
+
+- [x] **8. RLS notifications** — Migración `20260306000001_fix_rls_security.sql`: INSERT ahora requiere `auth.uid() = user_id` ✅
+- [x] **9. RLS subscriptions** — Eliminadas policies `WITH CHECK (true)` de service role. Edge functions usan `service_role` que bypasea RLS ✅
+- [x] **10. DB local encriptada** — SQLCipher + clave en `flutter_secure_storage` (Android KeyStore) ✅
+
+---
+
+## ⚙️ Configuración pendiente
+
+- [x] **11. `REVENUECAT_API_KEY` en env.example** — Agregada ✅
+- [x] **12. deploy.cmd** — Reescrito con paths relativos, package name correcto y opción AAB ✅
+- [x] **13. pubspec.yaml description** — Actualizada a descripción real ✅
+
+---
+
+## 🧩 Features incompletas / desconectadas
+
+- [x] **14. Daily reminder** — Ya estaba conectado: Settings → "Recordatorio Diario" → `scheduleDailyReminder()` ✅
+- [x] **15. Transacciones recurrentes** — Migración `recurring_rules`, edge function `recurring-run` (cron 6 AM UTC), UI con SegmentedButton frecuencia, TransactionDraft + AI service actualizados ✅
+- [x] **16. Transferencias entre cuentas** — Ya implementado en `confirm_transaction_screen.dart` con selector de cuenta destino ✅
+- [x] **17. Export CSV/PDF** — Agregado export PDF (paquete `pdf`), gate Pro en botón de exportar, diálogo CSV/JSON/PDF ✅
+- [x] **18. `ReceiptRepository`** — CRUD completo con Supabase Storage (getReceipts, create, update, delete + getImageUrl) ✅
+- [x] **19. Cuota de IA visible** — Ya implementado en Settings y AddTransactionScreen ✅
+- [x] **20. Doble inicialización de notificaciones** — Eliminada segunda `_localNotifs.initialize()` y duplicado `onBackgroundMessage` ✅
+
+---
+
+## 🧹 Calidad y deuda técnica
+
+- [x] **21. Tests reales** — 39 tests: Transaction, Account, Profile, AppNotification (fromJson/toJson/copyWith/defaults/round-trip) + AppConfig ✅
+- [x] **22. `AppNotification` con Freezed** — Migrado a `@freezed` con `@JsonSerializable(fieldRename: FieldRename.snake)`, consistente con los demás modelos ✅
+- [x] **23. `ProfileSettings` eliminado** — Clase muerta removida de `profile.dart` + regenerado Freezed ✅
+- [x] **24. `webClientId` externalizado** — Movido a `AppConfig.googleWebClientId` vía `String.fromEnvironment('GOOGLE_WEB_CLIENT_ID')` + agregado a `env.example` ✅
+- [x] **25. Compresión de imágenes** — `flutter_image_compress` + método `compressForUpload()` en CameraService. Capture/gallery reducido a 1280px/q75 ✅
+- [x] **26. Paginación en transacciones** — `PaginatedTransactionsNotifier` con infinite scroll (50/página vía `AppConfig.transactionsPageSize`) + scroll controller en history screen ✅
+- [x] **27. Google Fonts bundled** — Inter variable font bundled en `google_fonts/`, `allowRuntimeFetching = false` en main.dart ✅
+
+---
+
+## 🚀 Features futuras
+
+- [x] **F1. Widget de Home Screen Android** — `home_widget` package, XML layouts (widget_balance), BalanceWidgetProvider.kt, HomeWidgetService.dart, auto-update via ref.listen(totalBalanceProvider) ✅
+- [x] **F2. Resumen semanal por push** — Edge function `weekly-summary/index.ts` (queries 7 días, calcula ingresos/gastos/neto/top categoría), cron `0 11 * * 1` (lunes 8 AM Uruguay) ✅
+- [x] **F3. Metas de ahorro (Goals)** — Migración `20260307000001_goals.sql` con RLS, modelo Freezed `Goal` (progress/remaining/isOverdue), GoalRepository, GoalsScreen completa con crear/editar/agregar ahorro/eliminar, ruta `/goals` ✅
+- [x] **F4. Multi-idioma (i18n)** — `flutter_localizations`, ARB files (es + en, ~160 keys), `flutter gen-l10n`, clase `S`, configurado en MaterialApp. Infraestructura lista, migración progresiva de strings ✅
+- [x] **F5. Categorías con iconos/colores custom** — `IconMapper` con 50+ iconos Material, 12 colores preset, GridView picker en CategoriesScreen, persiste `icon` + `color` en DB ✅
+- [x] **F6. Compartir insights como imagen** — RepaintBoundary + toImage (3x pixelRatio) → PNG → Share.shareXFiles, FAB con ícono share, branding Flowmind en footer ✅
+- [x] **F7. Backup & restore manual** — `BackupService` (export 8 tablas + profile → JSON, import con upsert), gate Pro, tiles en Settings con export vía Share y restore desde documentos ✅
+- [ ] iOS completo (entitlements, RevenueCat iOS, productos)
+
+---
+
+## Progreso
+
+| Sección | Completados | Total | % |
+|:-------:|:-----------:|:-----:|:-:|
+| Pre-launch | 27 | 27 | 100% |
+| Features futuras | 7 | 8 | 87.5% |
+| **Total** | **34** | **35** | **97%** |
