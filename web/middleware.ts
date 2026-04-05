@@ -25,40 +25,41 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // IMPORTANT: use getUser() for server-side auth validation
+  // IMPORTANT: do not add logic between createServerClient and getUser()
   const { data: { user } } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register");
-  const isPublicRoute =
+
+  // Helper: create redirect and ALWAYS copy Supabase session cookies
+  function redirect(to: string) {
+    const url = request.nextUrl.clone();
+    url.pathname = to;
+    const res = NextResponse.redirect(url);
+    // Copy session cookies so Supabase SSR doesn't corrupt the session
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      res.cookies.set(cookie.name, cookie.value);
+    });
+    return res;
+  }
+
+  // Logged-in user hitting auth pages or landing → send to dashboard
+  if (user && (isAuthRoute || pathname === "/")) {
+    return redirect("/dashboard");
+  }
+
+  // Unauthenticated user hitting protected routes → send to login
+  const isPublic =
     pathname === "/" ||
     isAuthRoute ||
     pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next") ||
     pathname.startsWith("/images");
 
-  // Redirect logged-in users away from auth pages → dashboard
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+  if (!user && !isPublic) {
+    return redirect("/login");
   }
 
-  // Redirect logged-in users from landing → dashboard
-  if (user && pathname === "/") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
-
-  // Redirect unauthenticated users from protected routes → login
-  if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
-
+  // IMPORTANT: return supabaseResponse to preserve session cookies
   return supabaseResponse;
 }
 
