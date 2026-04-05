@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política de Privacidad — Flowmind</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #334155;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: var(--accent);
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+    h3 {
+      font-size: 1.1rem;
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    p, li {
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    ul {
+      margin-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.8rem;
+      text-align: left;
+    }
+    th {
+      background: var(--surface);
+      color: var(--accent);
+    }
+    td {
+      background: var(--bg);
+    }
+    .highlight {
+      background: var(--surface);
+      border-left: 3px solid var(--accent);
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .updated {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 3rem;
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <h1>Política de Privacidad</h1>
+    <p class="subtitle">Flowmind — App de Finanzas Personales con IA</p>
+
+    <p>
+      <strong>Jcg Software Solutions</strong> ("nosotros", "nuestro") opera la aplicación móvil
+      <strong>Flowmind</strong> ("la App"). Esta Política de Privacidad describe cómo recopilamos,
+      usamos, almacenamos y protegemos tu información personal cuando utilizas nuestra App.
+    </p>
+    <p>
+      Al descargar, instalar o usar Flowmind, aceptas las prácticas descritas en esta política.
+      Si no estás de acuerdo, por favor no utilices la App.
+    </p>
+
+    <!-- ───────────────────────────── 1 ───────────────────────────── -->
+    <h2>1. Información que Recopilamos</h2>
+
+    <h3>1.1 Información que proporcionas directamente</h3>
+    <table>
+      <tr><th>Dato</th><th>Cuándo se recopila</th><th>Propósito</th></tr>
+      <tr><td>Email y nombre</td><td>Al registrarte o iniciar sesión con Google</td><td>Autenticación y perfil de usuario</td></tr>
+      <tr><td>Datos financieros</td><td>Al agregar transacciones, cuentas, presupuestos</td><td>Funcionalidad principal de la App</td></tr>
+      <tr><td>Grabaciones de voz</td><td>Al usar la función "Agregar por voz"</td><td>Transcripción automática para registrar transacciones</td></tr>
+      <tr><td>Fotos de recibos/tickets</td><td>Al usar la función "Escanear ticket"</td><td>Extracción de texto (OCR) para registrar transacciones</td></tr>
+      <tr><td>Texto libre</td><td>Al usar la función "Agregar por texto"</td><td>Análisis con IA para registrar transacciones</td></tr>
+      <tr><td>Categorías personalizadas</td><td>Al crear categorías</td><td>Organización de transacciones</td></tr>
+    </table>
+
+    <h3>1.2 Información recopilada automáticamente</h3>
+    <table>
+      <tr><th>Dato</th><th>Propósito</th></tr>
+      <tr><td>Identificador de dispositivo (Device ID)</td><td>Firebase Analytics y diagnóstico</td></tr>
+      <tr><td>Token de notificaciones push (FCM)</td><td>Envío de alertas financieras</td></tr>
+      <tr><td>Eventos de uso y navegación</td><td>Análisis de uso de la App (Firebase Analytics)</td></tr>
+      <tr><td>Datos de errores y crashes</td><td>Mejora de estabilidad (Firebase Crashlytics)</td></tr>
+      <tr><td>Datos de suscripción</td><td>Gestión de plan (RevenueCat)</td></tr>
+    </table>
+
+    <h3>1.3 Datos biométricos</h3>
+    <p>
+      Si activas el bloqueo biométrico, la App utiliza la autenticación biométrica del dispositivo
+      (huella dactilar o reconocimiento facial) a través de las APIs del sistema operativo.
+      <strong>No almacenamos ni transmitimos datos biométricos.</strong> La verificación ocurre
+      localmente en tu dispositivo.
+    </p>
+
+    <!-- ───────────────────────────── 2 ───────────────────────────── -->
+    <h2>2. Cómo Usamos tu Información</h2>
+    <ul>
+      <li><strong>Funcionalidad principal:</strong> Registrar y gestionar tus transacciones financieras, cuentas y presupuestos.</li>
+      <li><strong>Análisis con IA:</strong> Procesar texto, voz e imágenes para generar transacciones automáticas e insights financieros.</li>
+      <li><strong>Alertas financieras:</strong> Enviarte notificaciones sobre presupuestos excedidos, saldos bajos y otros eventos relevantes.</li>
+      <li><strong>Mejora del servicio:</strong> Analizar patrones de uso anónimos para mejorar la experiencia.</li>
+      <li><strong>Gestión de suscripción:</strong> Administrar tu plan gratuito o de pago.</li>
+    </ul>
+
+    <!-- ───────────────────────────── 3 ───────────────────────────── -->
+    <h2>3. Servicios de Terceros y Procesamiento de Datos</h2>
+    <p>
+      Para brindarte las funciones de IA y otros servicios, compartimos ciertos datos con
+      proveedores externos. Estos proveedores actúan como procesadores de datos bajo nuestras instrucciones.
+    </p>
+
+    <table>
+      <tr><th>Proveedor</th><th>Datos compartidos</th><th>Propósito</th><th>Política de privacidad</th></tr>
+      <tr>
+        <td><strong>OpenAI</strong></td>
+        <td>Texto de transacciones, audio de voz</td>
+        <td>Procesamiento de lenguaje (GPT-4o-mini) y transcripción de voz (Whisper)</td>
+        <td><a href="https://openai.com/policies/privacy-policy" target="_blank">openai.com/privacy</a></td>
+      </tr>
+      <tr>
+        <td><strong>Google Cloud</strong></td>
+        <td>Imágenes de recibos/tickets</td>
+        <td>Reconocimiento óptico de caracteres (OCR) con Cloud Vision API</td>
+        <td><a href="https://cloud.google.com/terms/cloud-privacy-notice" target="_blank">cloud.google.com/privacy</a></td>
+      </tr>
+      <tr>
+        <td><strong>Supabase</strong></td>
+        <td>Todos los datos de la cuenta</td>
+        <td>Almacenamiento de base de datos, autenticación, funciones backend</td>
+        <td><a href="https://supabase.com/privacy" target="_blank">supabase.com/privacy</a></td>
+      </tr>
+      <tr>
+        <td><strong>Firebase (Google)</strong></td>
+        <td>ID de usuario, eventos de uso, errores, token FCM</td>
+        <td>Analytics, diagnóstico de errores, notificaciones push</td>
+        <td><a href="https://firebase.google.com/support/privacy" target="_blank">firebase.google.com/privacy</a></td>
+      </tr>
+      <tr>
+        <td><strong>RevenueCat</strong></td>
+        <td>ID de usuario, eventos de compra</td>
+        <td>Gestión de suscripciones in-app</td>
+        <td><a href="https://www.revenuecat.com/privacy" target="_blank">revenuecat.com/privacy</a></td>
+      </tr>
+    </table>
+
+    <div class="highlight">
+      <strong>Nota sobre IA:</strong> Los textos, audio e imágenes enviados a OpenAI y Google Cloud
+      se procesan en tiempo real y <strong>no son utilizados por estos proveedores para entrenar sus
+      modelos</strong> cuando se usan a través de sus APIs comerciales. Los datos se procesan y descartan
+      según sus políticas de retención de datos API.
+    </div>
+
+    <!-- ───────────────────────────── 4 ───────────────────────────── -->
+    <h2>4. Almacenamiento y Seguridad</h2>
+
+    <h3>4.1 Almacenamiento en la nube</h3>
+    <ul>
+      <li>Tus datos se almacenan en servidores de <strong>Supabase</strong> (PostgreSQL) con encriptación en reposo y en tránsito (TLS/HTTPS).</li>
+      <li>El acceso a los datos está protegido por <strong>Row Level Security (RLS)</strong>: cada usuario solo puede acceder a sus propios datos.</li>
+      <li>La autenticación se realiza mediante JWT (JSON Web Tokens) emitidos por Supabase Auth.</li>
+    </ul>
+
+    <h3>4.2 Almacenamiento local</h3>
+    <ul>
+      <li>La App almacena una copia local de tus datos para funcionamiento offline (SQLite/Drift).</li>
+      <li>Los datos locales se sincronizan con el servidor cuando hay conexión a internet.</li>
+    </ul>
+
+    <h3>4.3 Medidas de seguridad</h3>
+    <ul>
+      <li>Encriptación en tránsito (HTTPS/TLS) para todas las comunicaciones.</li>
+      <li>Encriptación en reposo en la base de datos del servidor.</li>
+      <li>Autenticación segura con Google Sign-In y email/contraseña.</li>
+      <li>Opción de bloqueo biométrico para acceso a la App.</li>
+      <li>Las claves de API nunca se almacenan en el código fuente del cliente.</li>
+    </ul>
+
+    <!-- ───────────────────────────── 5 ───────────────────────────── -->
+    <h2>5. Retención de Datos</h2>
+    <ul>
+      <li>Conservamos tus datos mientras mantengas una cuenta activa en Flowmind.</li>
+      <li>Si eliminas tu cuenta, todos tus datos personales serán eliminados de nuestros servidores en un plazo máximo de <strong>30 días</strong>.</li>
+      <li>Los datos anonimizados de analytics pueden conservarse con fines estadísticos.</li>
+      <li>Los backups del servidor se eliminan automáticamente después de 30 días.</li>
+    </ul>
+
+    <!-- ───────────────────────────── 6 ───────────────────────────── -->
+    <h2>6. Tus Derechos</h2>
+    <p>Como usuario, tienes derecho a:</p>
+    <ul>
+      <li><strong>Acceso:</strong> Solicitar una copia de todos tus datos personales.</li>
+      <li><strong>Rectificación:</strong> Corregir datos inexactos o incompletos.</li>
+      <li><strong>Eliminación:</strong> Solicitar la eliminación de tu cuenta y todos los datos asociados.</li>
+      <li><strong>Portabilidad:</strong> Exportar tus datos en formato estándar (CSV).</li>
+      <li><strong>Oposición:</strong> Oponerte al procesamiento de tus datos para ciertos fines.</li>
+      <li><strong>Limitación:</strong> Solicitar la restricción del procesamiento de tus datos.</li>
+    </ul>
+    <p>
+      Para ejercer cualquiera de estos derechos, contactanos a
+      <a href="mailto:jcg.software.solution@gmail.com">jcg.software.solution@gmail.com</a>.
+      Responderemos en un plazo máximo de 30 días.
+    </p>
+
+    <!-- ───────────────────────────── 7 ───────────────────────────── -->
+    <h2>7. Menores de Edad</h2>
+    <p>
+      Flowmind no está dirigida a menores de 13 años. No recopilamos información de menores de forma
+      intencional. Si descubrimos que hemos recopilado datos de un menor de 13 años, los eliminaremos
+      de inmediato. Si eres padre/madre o tutor y crees que tu hijo nos ha proporcionado información
+      personal, contactanos a
+      <a href="mailto:jcg.software.solution@gmail.com">jcg.software.solution@gmail.com</a>.
+    </p>
+
+    <!-- ───────────────────────────── 8 ───────────────────────────── -->
+    <h2>8. Cambios en esta Política</h2>
+    <p>
+      Podemos actualizar esta Política de Privacidad periódicamente. Te notificaremos sobre cambios
+      significativos a través de la App o por email. La fecha de "Última actualización" al final de
+      este documento indica cuándo se realizó la última modificación.
+    </p>
+    <p>
+      Te recomendamos revisar esta política periódicamente. El uso continuado de la App después de
+      cualquier cambio constituye tu aceptación de la política actualizada.
+    </p>
+
+    <!-- ───────────────────────────── 9 ───────────────────────────── -->
+    <h2>9. Legislación Aplicable</h2>
+    <p>
+      Esta política se rige por las leyes de la <strong>República Oriental del Uruguay</strong>,
+      incluyendo la Ley N° 18.331 de Protección de Datos Personales y su decreto reglamentario.
+      La autoridad de control competente es la Unidad Reguladora y de Control de Datos Personales (URCDP).
+    </p>
+
+    <!-- ───────────────────────────── 10 ──────────────────────────── -->
+    <h2>10. Contacto</h2>
+    <p>Si tienes preguntas, comentarios o solicitudes sobre esta Política de Privacidad:</p>
+    <ul>
+      <li><strong>Responsable:</strong> Jcg Software Solutions</li>
+      <li><strong>Email:</strong> <a href="mailto:jcg.software.solution@gmail.com">jcg.software.solution@gmail.com</a></li>
+      <li><strong>País:</strong> Uruguay</li>
+    </ul>
+
+    <p class="updated">Última actualización: 6 de marzo de 2026</p>
+
+  </div>
+</body>
+</html>
