@@ -256,7 +256,6 @@ function PhoneMockup() {
 
 // ─── Main landing page ────────────────────────────────────────────────────────
 export default function LandingPage() {
-  const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
