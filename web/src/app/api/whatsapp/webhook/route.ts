@@ -106,7 +106,7 @@ async function whisper(audioBase64: string): Promise<string> {
 
 // ─── Intent + extraction ──────────────────────────────────────────────────────
 interface IntentResult {
-  intent: "TRANSACTION" | "QUERY" | "HELP";
+  intent: "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION";
   transaction: {
     type: "expense" | "income";
     amount: number;
@@ -117,6 +117,11 @@ interface IntentResult {
     notes: string | null;
   } | null;
   query_type: "balance" | "monthly_summary" | "category_breakdown" | "recent" | "general" | null;
+  correction: {
+    action: "change_account" | "delete" | "change_amount";
+    account_name: string | null;
+    new_amount: number | null;
+  } | null;
 }
 
 async function classifyMessage(text: string, currency: string): Promise<IntentResult> {
@@ -126,7 +131,7 @@ Fecha hoy: ${today}. Moneda por defecto: ${currency}.
 
 Analizá el mensaje y respondé SOLO con JSON:
 {
-  "intent": "TRANSACTION" | "QUERY" | "HELP",
+  "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION",
   "transaction": {
     "type": "expense" | "income",
     "amount": number,
@@ -136,16 +141,26 @@ Analizá el mensaje y respondé SOLO con JSON:
     "category": string | null,
     "notes": string | null
   } | null,
-  "query_type": "balance" | "monthly_summary" | "category_breakdown" | "recent" | "general" | null
+  "query_type": "balance" | "monthly_summary" | "category_breakdown" | "recent" | "general" | null,
+  "correction": {
+    "action": "change_account" | "delete" | "change_amount",
+    "account_name": string | null,
+    "new_amount": number | null
+  } | null
 }
 
 TRANSACTION: registra un movimiento ("gasté", "pagué", "cobré", "ingresé", "compré")
 QUERY: pregunta sobre finanzas ("cuánto gasté", "cómo estoy", "balance", "resumen", "analiza")
+CORRECTION: corrige el último movimiento registrado. Ejemplos:
+  - "eso no era del efectivo, era del banco" → change_account, account_name: "banco"
+  - "ese gasto ponelo en la cuenta Santander" → change_account, account_name: "Santander"
+  - "borrá el último movimiento" → delete
+  - "el monto era 500 no 300" → change_amount, new_amount: 500
 HELP: saludo, ayuda, o contenido no financiero`;
 
   const raw = await gpt(system, text);
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return { intent: "HELP", transaction: null, query_type: null };
+  if (!match) return { intent: "HELP", transaction: null, query_type: null, correction: null };
   return JSON.parse(match[0]) as IntentResult;
 }
 
@@ -365,18 +380,22 @@ export async function POST(req: NextRequest) {
       const accounts: { id: string; name: string }[] = pending.payload.accounts ?? [];
 
       if (!isNaN(choice) && choice >= 1 && choice <= accounts.length) {
-        // Valid choice — complete the transaction
         const selectedAccount = accounts[choice - 1];
-        const txData: TxPayload = pending.payload;
-
-        // Delete the pending state
         await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
 
+        // Correction: change account of existing transaction
+        if (pending.payload.correction_tx_id) {
+          await supabase.from("transactions").update({ account_id: selectedAccount.id }).eq("id", pending.payload.correction_tx_id);
+          await reply(`✅ Moví *${pending.payload.correction_label ?? "el movimiento"}* a la cuenta *${selectedAccount.name}*`);
+          return NextResponse.json({ received: true });
+        }
+
+        // New transaction: complete with selected account
+        const txData: TxPayload = pending.payload;
         await insertTransaction(userId!, selectedAccount.id, selectedAccount.name, txData, currency, rawPhone, reply);
         await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
         return NextResponse.json({ received: true });
       } else {
-        // Invalid choice
         const list = accounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
         await reply(`❓ Opción inválida. Respondé con el número de la cuenta:\n\n${list}`);
         return NextResponse.json({ received: true });
@@ -557,6 +576,84 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
         );
       }
 
+      return NextResponse.json({ received: true });
+    }
+
+    // ── CORRECTION ───────────────────────────────────────────────────────────
+    if (intent.intent === "CORRECTION" && intent.correction) {
+      const corr = intent.correction;
+
+      // Get last transaction
+      const { data: lastTx } = await supabase
+        .from("transactions")
+        .select("id, type, amount, currency, merchant, category_id, account_id, accounts(name)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!lastTx) {
+        await reply("🤔 No encontré ningún movimiento reciente para corregir.");
+        return NextResponse.json({ received: true });
+      }
+
+      const txLabel = lastTx.merchant ?? `${lastTx.type === "income" ? "ingreso" : "gasto"} de ${lastTx.currency} ${lastTx.amount}`;
+
+      if (corr.action === "delete") {
+        await supabase.from("transactions").delete().eq("id", lastTx.id);
+        await reply(`🗑️ Eliminé el último movimiento: *${txLabel}*`);
+        return NextResponse.json({ received: true });
+      }
+
+      if (corr.action === "change_amount" && corr.new_amount) {
+        await supabase.from("transactions").update({ amount: corr.new_amount }).eq("id", lastTx.id);
+        const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(corr.new_amount);
+        await reply(`✏️ Actualicé el monto de *${txLabel}* a ${lastTx.currency} ${amt}`);
+        return NextResponse.json({ received: true });
+      }
+
+      if (corr.action === "change_account" && corr.account_name) {
+        // Find account by name (fuzzy)
+        const { data: matchedAccounts } = await supabase
+          .from("accounts")
+          .select("id, name")
+          .eq("user_id", userId)
+          .ilike("name", `%${corr.account_name}%`);
+
+        if (!matchedAccounts || matchedAccounts.length === 0) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
+          await reply(
+            `⚠️ No encontré ninguna cuenta que se llame *${corr.account_name}*.\n\n` +
+            `Creala desde la app y después volvé a avisarme:\n` +
+            `👉 ${appUrl}/accounts\n\n` +
+            `_Una vez creada podés decirme "ese ingreso ponelo en ${corr.account_name}" y lo muevo._`
+          );
+          return NextResponse.json({ received: true });
+        }
+
+        if (matchedAccounts.length === 1) {
+          const acc = matchedAccounts[0];
+          await supabase.from("transactions").update({ account_id: acc.id }).eq("id", lastTx.id);
+          await reply(`✅ Moví *${txLabel}* a la cuenta *${acc.name}*`);
+        } else {
+          // Multiple matches — ask to confirm
+          const list = matchedAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+          await supabase.from("whatsapp_pending").insert({
+            phone: rawPhone,
+            user_id: userId,
+            pending_type: "account_selection",
+            payload: {
+              correction_tx_id: lastTx.id,
+              correction_label: txLabel,
+              accounts: matchedAccounts.map((a) => ({ id: a.id, name: a.name })),
+            },
+          });
+          await reply(`¿A cuál de estas cuentas querés mover *${txLabel}*?\n\n${list}\n\n_Respondé con el número._`);
+        }
+        return NextResponse.json({ received: true });
+      }
+
+      await reply("🤔 No entendí qué querés corregir. Podés decirme:\n• \"Borrá el último movimiento\"\n• \"Ese gasto ponelo en [cuenta]\"\n• \"El monto era [número]\"");
       return NextResponse.json({ received: true });
     }
 
