@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -38,7 +37,6 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,12 +44,8 @@ export default function DashboardPage() {
     const supabase = createClient();
 
     async function load() {
-      // Use getSession (local, no network call) to avoid redirect loops
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.replace("/login");
-        return;
-      }
+      if (!session) return; // middleware already guards — just bail silently
       const user = session.user;
 
       const { start, end } = getMonthRange();
