@@ -136,9 +136,10 @@ interface IntentResult {
   } | null;
   query_type: "balance" | "monthly_summary" | "category_breakdown" | "recent" | "general" | null;
   correction: {
-    action: "change_account" | "delete" | "change_amount";
+    action: "change_account" | "delete" | "change_amount" | "rename_account";
     account_name: string | null;
     new_amount: number | null;
+    new_name: string | null;
   } | null;
   account_creation: {
     name: string | null;
@@ -180,7 +181,7 @@ Respondé ÚNICAMENTE con JSON válido (sin texto extra, sin markdown):
   "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION",
   "transaction": { "type": "expense"|"income", "amount": number, "currency": string, "merchant": string|null, "date": "YYYY-MM-DD", "category": string|null, "notes": string|null } | null,
   "query_type": "balance"|"monthly_summary"|"category_breakdown"|"recent"|"general" | null,
-  "correction": { "action": "change_account"|"delete"|"change_amount", "account_name": string|null, "new_amount": number|null } | null,
+  "correction": { "action": "change_account"|"delete"|"change_amount"|"rename_account", "account_name": string|null, "new_amount": number|null, "new_name": string|null } | null,
   "account_creation": { "name": string|null, "type": "bank"|"cash"|"savings"|"investment"|null, "currency": string|null } | null
 }
 
@@ -200,15 +201,16 @@ QUERY — el usuario pregunta sobre sus finanzas o pide análisis.
   "en qué gasté más?" → category_breakdown
   "mostrá los últimos movimientos" → recent
 
-CORRECTION — el usuario quiere corregir o modificar algo ya registrado.
-  Puede ser implícito o referirse a movimientos anteriores.
+CORRECTION — el usuario quiere corregir o modificar algo ya registrado (movimiento O cuenta).
+  Puede ser implícito o referirse a lo último registrado.
   "eso no era del efectivo, es de Santander" → change_account "Santander"
-  "el dinero que registré como efectivo es de mi cuenta banco" → change_account "banco"
-  "ese balance de 92000 que pusiste en efectivo es en realidad de Santander" → change_account "Santander"
   "ese ingreso ponelo en la cuenta del Itaú" → change_account "Itaú"
-  "me equivoqué de cuenta" → change_account (account_name: null si no especifica)
-  "borrá el último" / "eliminá eso" / "no, estaba mal" → delete
+  "me equivoqué de cuenta" → change_account (account_name: null)
+  "borrá el último" / "eliminá eso" → delete
   "el monto era 800 no 500" → change_amount 800
+  "no es Santandiar, es Santander" → rename_account, new_name: "Santander" (renombrar la última cuenta creada)
+  "el nombre está mal, es BROU no BORU" → rename_account, new_name: "BROU"
+  "cambiá el nombre de la cuenta a Itaú" → rename_account, new_name: "Itaú"
 
 ACCOUNT_CREATION — el usuario quiere crear o agregar una cuenta/billetera.
   "quiero crear una cuenta en Santander" → name: "Santander", type: "bank"
@@ -369,6 +371,40 @@ async function insertTransaction(
   );
 }
 
+// ─── Extract account correction during confirmation ───────────────────────────
+async function extractConfirmationResponse(
+  text: string,
+  current: { name: string | null; type: string | null; currency: string | null }
+): Promise<{ confirmed: boolean; cancelled: boolean; name?: string; type?: string; currency?: string }> {
+  const raw = await gpt(
+    `El usuario está confirmando la creación de esta cuenta:
+Nombre: ${current.name ?? "sin nombre"}
+Tipo: ${current.type ?? "desconocido"}
+Moneda: ${current.currency ?? "desconocida"}
+
+El usuario respondió: "${text}"
+
+Respondé SOLO JSON:
+{
+  "confirmed": true|false,
+  "cancelled": true|false,
+  "name": string|null,
+  "type": "bank"|"cash"|"savings"|"investment"|null,
+  "currency": string|null
+}
+
+- confirmed=true si el usuario dice sí/ok/dale/correcto/perfecto/claro/si/yes
+- cancelled=true si dice no/cancelar/olvidalo/no quiero
+- Si corrige datos (ej: "no, el nombre es Santander"): confirmed=false, cancelled=false, name: "Santander"
+- Solo incluí los campos que cambian, null para el resto`,
+    text,
+    "gpt-4o"
+  );
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { confirmed: false, cancelled: false };
+  try { return JSON.parse(match[0]); } catch { return { confirmed: false, cancelled: false }; }
+}
+
 // ─── Account type helpers ─────────────────────────────────────────────────────
 const ACCOUNT_TYPES: Record<string, string> = {
   "1": "bank", "banco": "bank", "bank": "bank", "bancaria": "bank", "corriente": "bank",
@@ -479,6 +515,58 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ received: true });
       }
 
+      // ── Pending: account creation — waiting for confirmation ─────────────
+      if (pending.pending_type === "account_creation_confirm") {
+        const { name, type, currency: accCurrency } = pending.payload;
+        const response = await extractConfirmationResponse(textContent, { name, type, currency: accCurrency });
+
+        if (response.cancelled) {
+          await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+          await reply("👍 Cancelé la creación de la cuenta. Avisame cuando quieras intentarlo de nuevo.");
+          return NextResponse.json({ received: true });
+        }
+
+        // Update fields if user corrected something
+        const updatedName = response.name ?? name;
+        const updatedType = response.type ?? type;
+        const updatedCurrency = response.currency ?? accCurrency;
+
+        if (response.confirmed) {
+          await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+          const { data: newAcc, error } = await supabase.from("accounts").insert({
+            user_id: userId, name: updatedName ?? "Mi cuenta", type: updatedType ?? "bank",
+            currency: updatedCurrency ?? currency, initial_balance: 0, balance: 0,
+            is_primary: false,
+            icon: updatedType === "bank" ? "bank" : updatedType === "savings" ? "piggy_bank" : "wallet",
+            color: "#6366f1",
+          }).select().single();
+
+          if (error || !newAcc) {
+            await reply(`❌ No pude crear la cuenta. Intentá desde la app: 👉 ${APP_URL}/accounts`);
+          } else {
+            await reply(
+              `✅ *Cuenta creada*\n\n🏦 *${newAcc.name}*\n` +
+              `📋 ${ACCOUNT_TYPE_LABELS[updatedType ?? "bank"] ?? updatedType}\n` +
+              `💱 ${newAcc.currency}\n\nYa podés usarla para registrar movimientos 🎉`
+            );
+          }
+        } else {
+          // Update pending with corrected data and re-confirm
+          await supabase.from("whatsapp_pending").update({
+            payload: { ...pending.payload, name: updatedName, type: updatedType, currency: updatedCurrency },
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          }).eq("id", pending.id);
+          await reply(
+            `📝 Actualicé los datos. ¿Así está bien?\n\n` +
+            `🏦 *${updatedName ?? "Sin nombre"}*\n` +
+            `📋 ${ACCOUNT_TYPE_LABELS[updatedType ?? ""] ?? updatedType ?? "?"}\n` +
+            `💱 ${updatedCurrency ?? currency}\n\n` +
+            `Respondé *sí* para confirmar o decime qué cambiar.`
+          );
+        }
+        return NextResponse.json({ received: true });
+      }
+
       // ── Pending: account creation — waiting for type ──────────────────────
       if (pending.pending_type === "account_creation_type") {
         const resolvedType = resolveAccountType(textContent.trim());
@@ -490,31 +578,21 @@ export async function POST(req: NextRequest) {
           );
           return NextResponse.json({ received: true });
         }
-        await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+        // Move to confirmation step
+        await supabase.from("whatsapp_pending").update({
+          pending_type: "account_creation_confirm",
+          payload: { ...pending.payload, type: resolvedType },
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        }).eq("id", pending.id);
         const { name, currency: accCurrency } = pending.payload;
-        const { data: newAcc, error } = await supabase.from("accounts").insert({
-          user_id: userId,
-          name: name ?? "Mi cuenta",
-          type: resolvedType,
-          currency: accCurrency ?? currency,
-          initial_balance: 0,
-          balance: 0,
-          is_primary: false,
-          icon: resolvedType === "bank" ? "bank" : resolvedType === "savings" ? "piggy_bank" : "wallet",
-          color: "#6366f1",
-        }).select().single();
-
-        if (error || !newAcc) {
-          await reply("❌ No pude crear la cuenta. Intentá desde la app: " + APP_URL + "/accounts");
-        } else {
-          await reply(
-            `✅ *Cuenta creada exitosamente*\n\n` +
-            `🏦 *${newAcc.name}*\n` +
-            `📋 Tipo: ${ACCOUNT_TYPE_LABELS[resolvedType] ?? resolvedType}\n` +
-            `💱 Moneda: ${newAcc.currency}\n\n` +
-            `Ya podés registrar movimientos en esta cuenta 🎉`
-          );
-        }
+        const finalCurr = accCurrency ?? currency;
+        await reply(
+          `Voy a crear esta cuenta:\n\n` +
+          `🏦 *${name ?? "Sin nombre"}*\n` +
+          `📋 ${ACCOUNT_TYPE_LABELS[resolvedType] ?? resolvedType}\n` +
+          `💱 ${finalCurr}\n\n` +
+          `¿Está bien así? Respondé *sí* para confirmar o decime si querés cambiar algo.`
+        );
         return NextResponse.json({ received: true });
       }
 
@@ -704,30 +782,19 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       // Check if needs currency
       const finalCurrency = accCurrency ?? currency;
 
-      const { data: newAcc, error } = await supabase.from("accounts").insert({
-        user_id: userId,
-        name: accName ?? "Mi cuenta",
-        type: accType,
-        currency: finalCurrency,
-        initial_balance: 0,
-        balance: 0,
-        is_primary: false,
-        icon: accType === "bank" ? "bank" : accType === "savings" ? "piggy_bank" : "wallet",
-        color: "#6366f1",
-      }).select().single();
-
-      if (error || !newAcc) {
-        await reply(`❌ No pude crear la cuenta. Intentá desde la app: 👉 ${APP_URL}/accounts`);
-      } else {
-        await reply(
-          `✅ *Cuenta creada exitosamente*\n\n` +
-          `🏦 *${newAcc.name}*\n` +
-          `📋 Tipo: ${ACCOUNT_TYPE_LABELS[accType] ?? accType}\n` +
-          `💱 Moneda: ${newAcc.currency}\n\n` +
-          `Ya podés registrar movimientos en esta cuenta.\n` +
-          `También podés ajustar el saldo inicial desde la app: 👉 ${APP_URL}/accounts 🎉`
-        );
-      }
+      // Save confirmation pending
+      const finalCurrency2 = accCurrency ?? currency;
+      await supabase.from("whatsapp_pending").insert({
+        phone: rawPhone, user_id: userId, pending_type: "account_creation_confirm",
+        payload: { name: accName, type: accType, currency: finalCurrency2 },
+      });
+      await reply(
+        `Voy a crear esta cuenta:\n\n` +
+        `🏦 *${accName ?? "Sin nombre"}*\n` +
+        `📋 ${ACCOUNT_TYPE_LABELS[accType] ?? accType}\n` +
+        `💱 ${finalCurrency2}\n\n` +
+        `¿Está bien así? Respondé *sí* para confirmar o decime si querés cambiar algo.`
+      );
       return NextResponse.json({ received: true });
     }
 
@@ -784,6 +851,23 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
       const txLabel = lastTx.merchant ??
         `${lastTx.type === "income" ? "ingreso" : "gasto"} de ${lastTx.currency} ${lastTx.amount}`;
+
+      // ── Rename last created account ─────────────────────────────────────────
+      if (corr.action === "rename_account" && corr.new_name) {
+        const { data: lastAcc } = await supabase
+          .from("accounts").select("id, name")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+
+        if (!lastAcc) {
+          await reply("🤔 No encontré ninguna cuenta reciente para renombrar.");
+          return NextResponse.json({ received: true });
+        }
+        await supabase.from("accounts").update({ name: corr.new_name }).eq("id", lastAcc.id);
+        await reply(`✅ Renombré la cuenta *${lastAcc.name}* a *${corr.new_name}*`);
+        return NextResponse.json({ received: true });
+      }
 
       if (corr.action === "delete") {
         await supabase.from("transactions").delete().eq("id", lastTx.id);
