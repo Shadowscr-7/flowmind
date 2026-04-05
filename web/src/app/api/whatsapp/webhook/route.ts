@@ -12,6 +12,31 @@ function db() {
   return createClient(SB_URL, SB_SERVICE_KEY);
 }
 
+// ─── Log WhatsApp message ─────────────────────────────────────────────────────
+async function logMsg(params: {
+  userId?: string | null;
+  phone: string;
+  direction: "inbound" | "outbound";
+  messageType?: "text" | "audio" | "image";
+  content?: string | null;
+  intent?: string | null;
+  transactionId?: string | null;
+}) {
+  try {
+    await db().from("whatsapp_messages").insert({
+      user_id: params.userId ?? null,
+      phone: params.phone,
+      direction: params.direction,
+      message_type: params.messageType ?? "text",
+      content: params.content ?? null,
+      intent: params.intent ?? null,
+      transaction_id: params.transactionId ?? null,
+    });
+  } catch (e) {
+    console.error("logMsg error:", e);
+  }
+}
+
 // ─── Send WhatsApp message ────────────────────────────────────────────────────
 async function sendWA(to: string, text: string) {
   if (!EVO_URL || !EVO_KEY || !EVO_INSTANCE) return;
@@ -253,6 +278,15 @@ export async function POST(req: NextRequest) {
 
     const supabase = db();
 
+    // Determine message type and content
+    const messageContent = msgData.message;
+    const textContent: string | null =
+      messageContent?.conversation ?? messageContent?.extendedTextMessage?.text ?? null;
+    const hasImage = !!(messageContent?.imageMessage ?? messageContent?.documentMessage);
+    const hasAudio = !!(messageContent?.audioMessage ?? messageContent?.pttMessage);
+
+    const inboundType: "text" | "audio" | "image" = hasAudio ? "audio" : hasImage ? "image" : "text";
+
     // Find user by phone
     const { data: profile } = await supabase
       .from("profiles")
@@ -260,10 +294,34 @@ export async function POST(req: NextRequest) {
       .or(`whatsapp_phone.eq.${phoneWithPlus},whatsapp_phone.eq.${phoneWithoutPlus}`)
       .maybeSingle();
 
+    const userId = profile?.id ?? null;
+
+    // Log inbound message (fire-and-forget)
+    void logMsg({
+      userId,
+      phone: rawPhone,
+      direction: "inbound",
+      messageType: inboundType,
+      content: textContent,
+    });
+
+    // Helper: send + log outbound
+    const reply = async (text: string, opts?: { intent?: string; transactionId?: string }) => {
+      await sendWA(rawPhone, text);
+      void logMsg({
+        userId,
+        phone: rawPhone,
+        direction: "outbound",
+        messageType: "text",
+        content: text,
+        intent: opts?.intent ?? null,
+        transactionId: opts?.transactionId ?? null,
+      });
+    };
+
     if (!profile) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
-      await sendWA(
-        rawPhone,
+      await reply(
         `👋 ¡Hola! No encontré una cuenta de *FlowMind* asociada a este número (${phoneWithPlus}).\n\n` +
           `*¿Aún no tenés cuenta?*\n` +
           `Registrarte es fácil — al crear tu cuenta podés ingresar este número y empezar a usarme al instante:\n` +
@@ -276,7 +334,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    const userId = profile.id;
     const userName = profile.display_name ?? "Usuario";
     const currency = profile.currency_default ?? "UYU";
 
@@ -291,15 +348,9 @@ export async function POST(req: NextRequest) {
 
     const defaultAccount = accounts?.[0];
     if (!defaultAccount) {
-      await sendWA(rawPhone, "❌ No tenés cuentas configuradas. Creá una desde la app web primero.");
+      await reply("❌ No tenés cuentas configuradas. Creá una desde la app web primero.");
       return NextResponse.json({ received: true });
     }
-
-    const messageContent = msgData.message;
-    const textContent: string | null =
-      messageContent?.conversation ?? messageContent?.extendedTextMessage?.text ?? null;
-    const hasImage = !!(messageContent?.imageMessage ?? messageContent?.documentMessage);
-    const hasAudio = !!(messageContent?.audioMessage ?? messageContent?.pttMessage);
 
     let processedText: string | null = textContent;
     let source = "whatsapp";
@@ -308,16 +359,23 @@ export async function POST(req: NextRequest) {
     if (hasAudio) {
       const audioB64 = await downloadMedia(remoteJid, msgData.key?.id ?? "");
       if (!audioB64) {
-        await sendWA(rawPhone, "❌ No pude procesar el audio. Intentá por texto.");
+        await reply("❌ No pude procesar el audio. Intentá por texto.");
         return NextResponse.json({ received: true });
       }
       try {
         processedText = await whisper(audioB64);
         source = "whatsapp_voice";
-        // Send transcript confirmation
-        await sendWA(rawPhone, `🎤 _Transcripción: "${processedText}"_\n\nProcesando...`);
+        // Update inbound log with transcription
+        void logMsg({
+          userId,
+          phone: rawPhone,
+          direction: "inbound",
+          messageType: "audio",
+          content: processedText,
+        });
+        await reply(`🎤 _Transcripción: "${processedText}"_\n\nProcesando...`);
       } catch {
-        await sendWA(rawPhone, "❌ Error transcribiendo el audio. Intentá por texto.");
+        await reply("❌ Error transcribiendo el audio. Intentá por texto.");
         return NextResponse.json({ received: true });
       }
     }
@@ -326,7 +384,7 @@ export async function POST(req: NextRequest) {
     if (hasImage) {
       const imgB64 = await downloadMedia(remoteJid, msgData.key?.id ?? "");
       if (!imgB64) {
-        await sendWA(rawPhone, "❌ No pude descargar la imagen. Intentá de nuevo.");
+        await reply("❌ No pude descargar la imagen. Intentá de nuevo.");
         return NextResponse.json({ received: true });
       }
 
@@ -348,11 +406,11 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
         const parsed = JSON.parse(match[0]);
 
         if (parsed.error === "not_a_receipt") {
-          await sendWA(rawPhone, "🤔 No pude leer un ticket en la imagen. ¿Podés describirlo por texto?");
+          await reply("🤔 No pude leer un ticket en la imagen. ¿Podés describirlo por texto?");
           return NextResponse.json({ received: true });
         }
 
-        const categoryId = await resolveCategoryId(userId, parsed.category);
+        const categoryId = await resolveCategoryId(userId!, parsed.category);
         const { data: tx, error: txErr } = await supabase.from("transactions").insert({
           user_id: userId,
           account_id: defaultAccount.id,
@@ -372,21 +430,30 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
 
         const emoji = "💸";
         const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(parsed.amount);
-        await sendWA(
-          rawPhone,
+        const responseText =
           `${emoji} *Ticket guardado* en ${defaultAccount.name}\n\n` +
-            `🏪 *${parsed.merchant ?? "Sin comercio"}*\n` +
-            `💵 ${parsed.currency ?? currency} ${amt}\n` +
-            `📅 ${parsed.date ?? "hoy"}\n` +
-            (parsed.notes ? `📝 ${parsed.notes}\n` : "") +
-            `\n✅ Guardado exitosamente`
-        );
+          `🏪 *${parsed.merchant ?? "Sin comercio"}*\n` +
+          `💵 ${parsed.currency ?? currency} ${amt}\n` +
+          `📅 ${parsed.date ?? "hoy"}\n` +
+          (parsed.notes ? `📝 ${parsed.notes}\n` : "") +
+          `\n✅ Guardado exitosamente`;
+
+        await sendWA(rawPhone, responseText);
+        void logMsg({
+          userId,
+          phone: rawPhone,
+          direction: "outbound",
+          messageType: "text",
+          content: responseText,
+          intent: "TRANSACTION",
+          transactionId: tx.id,
+        });
 
         await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
         return NextResponse.json({ received: true });
       } catch (e) {
         console.error("Image analysis error:", e);
-        await sendWA(rawPhone, "❌ No pude analizar el ticket. Describílo por texto.");
+        await reply("❌ No pude analizar el ticket. Describílo por texto.");
         return NextResponse.json({ received: true });
       }
     }
@@ -398,14 +465,14 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
 
     const lowerText = processedText.toLowerCase().trim();
     if (lowerText === "ayuda" || lowerText === "help" || lowerText === "?") {
-      await sendWA(
-        rawPhone,
+      await reply(
         `👋 Hola *${userName}*! Podés hacer:\n\n` +
           `💸 *Registrar gastos:*\n  "Gasté 500 en el super"\n  "Almuerzo 350 pesos"\n\n` +
           `💰 *Registrar ingresos:*\n  "Cobré el sueldo 45000"\n  "Ingresé 5000 freelance"\n\n` +
           `📸 *Ticket/Factura:*\n  Mandá una foto y lo proceso\n\n` +
           `🎤 *Audio:*\n  Mandá una nota de voz\n\n` +
-          `📊 *Consultas:*\n  "¿Cuánto gasté este mes?"\n  "¿Cómo está mi balance?"\n  "Dame un análisis"`
+          `📊 *Consultas:*\n  "¿Cuánto gasté este mes?"\n  "¿Cómo está mi balance?"\n  "Dame un análisis"`,
+        { intent: "HELP" }
       );
       return NextResponse.json({ received: true });
     }
@@ -417,7 +484,7 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
     // ── TRANSACTION ───────────────────────────────────────────────────────────
     if (intent.intent === "TRANSACTION" && intent.transaction) {
       const tx = intent.transaction;
-      const categoryId = await resolveCategoryId(userId, tx.category);
+      const categoryId = await resolveCategoryId(userId!, tx.category);
 
       const { data: saved, error: txErr } = await supabase.from("transactions").insert({
         user_id: userId,
@@ -435,40 +502,48 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
       }).select().single();
 
       if (txErr || !saved) {
-        await sendWA(rawPhone, "❌ Error al guardar. Intentá de nuevo.");
+        await reply("❌ Error al guardar. Intentá de nuevo.");
         return NextResponse.json({ received: true });
       }
 
       const emoji = tx.type === "income" ? "💰" : "💸";
       const typeLabel = tx.type === "income" ? "Ingreso" : "Gasto";
       const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
-
-      await sendWA(
-        rawPhone,
+      const responseText =
         `${emoji} *${typeLabel} guardado* en ${defaultAccount.name}\n\n` +
-          `📌 *${tx.merchant ?? tx.category ?? "Sin descripción"}*\n` +
-          `💵 ${tx.currency ?? currency} ${amt}\n` +
-          `📅 ${tx.date ?? "hoy"}\n` +
-          (tx.notes ? `📝 ${tx.notes}\n` : "") +
-          `\n✅ Registrado exitosamente`
-      );
+        `📌 *${tx.merchant ?? tx.category ?? "Sin descripción"}*\n` +
+        `💵 ${tx.currency ?? currency} ${amt}\n` +
+        `📅 ${tx.date ?? "hoy"}\n` +
+        (tx.notes ? `📝 ${tx.notes}\n` : "") +
+        `\n✅ Registrado exitosamente`;
+
+      await sendWA(rawPhone, responseText);
+      void logMsg({
+        userId,
+        phone: rawPhone,
+        direction: "outbound",
+        messageType: "text",
+        content: responseText,
+        intent: "TRANSACTION",
+        transactionId: saved.id,
+      });
 
       return NextResponse.json({ received: true });
     }
 
     // ── QUERY (AI agent) ──────────────────────────────────────────────────────
     if (intent.intent === "QUERY") {
-      const ctx = await getUserContext(userId, currency);
+      const ctx = await getUserContext(userId!, currency);
       const answer = await answerQuery(processedText, ctx, userName);
-      await sendWA(rawPhone, answer);
+      await reply(answer, { intent: "QUERY" });
       await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 2 }).eq("id", userId);
       return NextResponse.json({ received: true });
     }
 
     // ── HELP/default ──────────────────────────────────────────────────────────
-    await sendWA(
-      rawPhone,
-      `🤔 No entendí bien. Podés decirme:\n• Un gasto: _"Gasté 500 en el super"_\n• Un ingreso: _"Cobré 25000"_\n• Una consulta: _"¿Cuánto gasté este mes?"_\n• O enviá una foto de un ticket\n\nEscribí *ayuda* para más info.`
+    await reply(
+      `🤔 No entendí bien. Podés decirme:\n• Un gasto: _"Gasté 500 en el super"_\n• Un ingreso: _"Cobré 25000"_\n• Una consulta: _"¿Cuánto gasté este mes?"_\n• O enviá una foto de un ticket\n\nEscribí *ayuda* para más info.`,
+      { intent: "HELP" }
     );
 
     return NextResponse.json({ received: true });

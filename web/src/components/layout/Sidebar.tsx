@@ -13,6 +13,7 @@ import {
   Settings,
   Zap,
   MessageSquare,
+  MessagesSquare,
 } from "lucide-react";
 
 const navItems = [
@@ -28,6 +29,7 @@ const navItems = [
 ];
 
 const adminItems = [
+  { href: "/admin/conversations", icon: MessagesSquare, label: "Conversaciones" },
   { href: "/settings/whatsapp", icon: MessageSquare, label: "WhatsApp Admin" },
 ];
 
