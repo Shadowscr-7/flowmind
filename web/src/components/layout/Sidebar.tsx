@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -14,7 +14,9 @@ import {
   Zap,
   MessageSquare,
   MessagesSquare,
+  LogOut,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -35,11 +37,18 @@ const adminItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
   return (
-    <aside className="hidden lg:flex flex-col w-[280px] min-h-screen bg-sidebar shrink-0">
+    <aside className="hidden lg:flex flex-col w-[280px] h-screen sticky top-0 bg-sidebar shrink-0">
       {/* Logo */}
-      <div className="px-6 py-7">
+      <div className="px-6 py-7 shrink-0">
         <Link href="/" className="flex items-center gap-2.5 group">
           <img
             src="/images/logo.png"
@@ -60,8 +69,8 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 pb-6 space-y-0.5">
+      {/* Nav — scrollable */}
+      <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-0.5">
         {navItems.map(({ href, icon: Icon, label }) => {
           const isActive =
             href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
@@ -82,31 +91,39 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Admin section */}
-      <div className="px-3 pb-3 border-t border-white/5 pt-3">
-        {adminItems.map(({ href, icon: Icon, label }) => {
-          const isActive = pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                isActive
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-600 hover:bg-white/5 hover:text-slate-400"
-              }`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          );
-        })}
-      </div>
+      {/* Footer — always visible at bottom */}
+      <div className="shrink-0 border-t border-white/5">
+        {/* Admin section */}
+        <div className="px-3 pt-3 pb-1">
+          {adminItems.map(({ href, icon: Icon, label }) => {
+            const isActive = pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-600 hover:bg-white/5 hover:text-slate-400"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
 
-      {/* Bottom */}
-      <div className="px-6 pb-6">
-        <div className="text-xs text-slate-600 text-center">
-          FlowMind © 2026
+        {/* Logout + copyright */}
+        <div className="px-3 pb-4 pt-1">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-red-400 transition-colors"
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            Cerrar sesión
+          </button>
+          <p className="text-xs text-slate-700 text-center mt-2">FlowMind © 2026</p>
         </div>
       </div>
     </aside>
