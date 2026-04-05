@@ -2,9 +2,21 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FlowMind — Finanzas Personales",
+  title: "FlowMind — Finanzas Personales con IA",
   description:
-    "Gestiona tus finanzas personales con inteligencia artificial. Registra gastos, crea presupuestos y alcanza tus metas.",
+    "Gestioná tus finanzas personales con inteligencia artificial. Registrá gastos por WhatsApp, web o app móvil. Todo sincronizado en tiempo real.",
+  icons: {
+    icon: [
+      { url: "/images/logo.png", type: "image/png" },
+    ],
+    apple: "/images/logo.png",
+    shortcut: "/images/logo.png",
+  },
+  openGraph: {
+    title: "FlowMind — Finanzas Personales con IA",
+    description: "Registrá gastos por WhatsApp, web o app. Todo sincronizado con IA.",
+    images: [{ url: "/images/logo.png" }],
+  },
 };
 
 export default function RootLayout({

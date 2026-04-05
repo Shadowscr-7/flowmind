@@ -11,7 +11,6 @@ import {
   BarChart3,
   Bell,
   Settings,
-  Zap,
   MessageSquare,
 } from "lucide-react";
 
@@ -38,14 +37,24 @@ export function Sidebar() {
     <aside className="hidden lg:flex flex-col w-[280px] min-h-screen bg-sidebar shrink-0">
       {/* Logo */}
       <div className="px-6 py-7">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-indigo-500 flex items-center justify-center">
-            <Zap className="h-4 w-4 text-white" fill="white" />
-          </div>
-          <span className="text-white font-semibold text-lg tracking-tight">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <img
+            src="/images/logo.png"
+            alt="FlowMind"
+            className="h-9 w-9 object-contain drop-shadow-md"
+          />
+          <span
+            className="font-extrabold text-lg tracking-tight"
+            style={{
+              background: "linear-gradient(135deg, #a5b4fc 0%, #818cf8 40%, #67e8f9 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
             FlowMind
           </span>
-        </div>
+        </Link>
       </div>
 
       {/* Nav */}

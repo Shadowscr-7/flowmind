@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import {
-  Zap,
   MessageSquare,
   Smartphone,
   Globe,
@@ -19,7 +18,29 @@ import {
   Mic,
   Camera,
   RefreshCw,
+  Zap,
 } from "lucide-react";
+
+function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const imgSize = size === "sm" ? "h-7 w-7" : size === "lg" ? "h-14 w-14" : "h-9 w-9";
+  const textSize = size === "sm" ? "text-base" : size === "lg" ? "text-3xl" : "text-xl";
+  return (
+    <div className="flex items-center gap-2.5">
+      <img src="/images/logo.png" alt="FlowMind" className={`${imgSize} object-contain drop-shadow-lg`} />
+      <span
+        className={`font-extrabold ${textSize} tracking-tight`}
+        style={{
+          background: "linear-gradient(135deg, #a5b4fc 0%, #818cf8 40%, #67e8f9 100%)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
+        }}
+      >
+        FlowMind
+      </span>
+    </div>
+  );
+}
 
 // ─── Scroll animation hook ────────────────────────────────────────────────────
 function useScrollReveal() {
@@ -129,8 +150,8 @@ function WhatsAppMockup() {
     <div className="rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-[#111b21] w-full max-w-xs">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-[#202c33] border-b border-white/5">
-        <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
-          <Zap className="w-4 h-4 text-white" fill="white" />
+        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+          <img src="/images/logo.png" alt="FlowMind" className="w-6 h-6 object-contain" />
         </div>
         <div>
           <p className="text-white text-sm font-medium">FlowMind AI</p>
@@ -240,12 +261,7 @@ export default function LandingPage() {
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass-dark border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/40 animate-pulse-glow">
-              <Zap className="h-4 w-4 text-white" fill="white" />
-            </div>
-            <span className="font-semibold text-lg tracking-tight">FlowMind</span>
-          </div>
+          <BrandLogo size="sm" />
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-sm text-slate-400 hover:text-white transition-colors hidden sm:block">
               Ingresar
@@ -481,8 +497,8 @@ export default function LandingPage() {
               {/* Visual sync diagram */}
               <div className="relative flex items-center justify-center h-80">
                 {/* Center node */}
-                <div className="absolute z-10 w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center shadow-2xl animate-pulse-glow">
-                  <Zap className="h-8 w-8 text-white" fill="white" />
+                <div className="absolute z-10 w-20 h-20 rounded-full bg-slate-900 border border-indigo-500/40 flex items-center justify-center shadow-2xl animate-pulse-glow overflow-hidden">
+                  <img src="/images/logo.png" alt="FlowMind" className="w-14 h-14 object-contain" />
                 </div>
 
                 {/* Orbit ring */}
@@ -693,8 +709,8 @@ export default function LandingPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-indigo-600/20 rounded-full blur-3xl animate-pulse" />
         </div>
         <FadeUp className="relative z-10 text-center max-w-3xl mx-auto px-6">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-indigo-600/50 animate-pulse-glow">
-            <Zap className="h-8 w-8 text-white" fill="white" />
+          <div className="flex justify-center mb-6">
+            <img src="/images/logo.png" alt="FlowMind" className="h-20 w-20 object-contain drop-shadow-2xl animate-pulse-glow" />
           </div>
           <h2 className="text-4xl lg:text-5xl font-bold mb-5">
             Empezá hoy mismo.<br />
@@ -725,9 +741,7 @@ export default function LandingPage() {
       <footer className="border-t border-white/5 py-10">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-600">
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-md bg-indigo-500/20 flex items-center justify-center">
-              <Zap className="h-3 w-3 text-indigo-400" fill="currentColor" />
-            </div>
+            <img src="/images/logo.png" alt="FlowMind" className="h-6 w-6 object-contain opacity-80" />
             <span className="text-slate-400 font-medium">FlowMind</span>
             <span>© 2026</span>
           </div>
