@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import {
   MessageSquare,
@@ -255,6 +257,19 @@ function PhoneMockup() {
 
 // ─── Main landing page ────────────────────────────────────────────────────────
 export default function LandingPage() {
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    createClient().auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        router.replace("/dashboard");
+      } else {
+        setIsLoggedIn(false);
+      }
+    });
+  }, [router]);
+
   return (
     <div className="bg-slate-950 text-white overflow-x-hidden">
 
@@ -263,15 +278,26 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <BrandLogo size="sm" />
           <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm text-slate-400 hover:text-white transition-colors hidden sm:block">
-              Ingresar
-            </Link>
-            <Link
-              href="/register"
-              className="text-sm font-medium px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-all hover:shadow-lg hover:shadow-indigo-500/30 active:scale-95"
-            >
-              Empezar ahora
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                href="/dashboard"
+                className="text-sm font-medium px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-all hover:shadow-lg hover:shadow-indigo-500/30 active:scale-95"
+              >
+                Ir al Dashboard →
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm text-slate-400 hover:text-white transition-colors hidden sm:block">
+                  Ingresar
+                </Link>
+                <Link
+                  href="/register"
+                  className="text-sm font-medium px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-all hover:shadow-lg hover:shadow-indigo-500/30 active:scale-95"
+                >
+                  Empezar ahora
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -279,7 +305,7 @@ export default function LandingPage() {
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
         {/* Animated background blobs */}
-        <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 -right-20 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-3xl animate-blob" />
           <div className="absolute bottom-1/4 -left-20 w-[400px] h-[400px] bg-violet-600/15 rounded-full blur-3xl animate-blob animation-delay-2000" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-900/30 rounded-full blur-3xl animate-blob animation-delay-4000" />
@@ -287,7 +313,7 @@ export default function LandingPage() {
 
         {/* Grid pattern overlay */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 opacity-[0.03] pointer-events-none"
           style={{
             backgroundImage: `linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)`,
             backgroundSize: "60px 60px",
@@ -720,19 +746,31 @@ export default function LandingPage() {
             Sumate a quienes ya tienen el control de sus finanzas personales con IA.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              href="/register"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-lg transition-all hover:shadow-2xl hover:shadow-indigo-500/40 hover:-translate-y-1 active:scale-95"
-            >
-              Crear mi cuenta
-              <ArrowRight className="h-5 w-5" />
-            </Link>
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl glass border border-white/10 hover:bg-white/10 text-slate-300 font-medium text-lg transition-all"
-            >
-              Ya tengo cuenta
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-lg transition-all hover:shadow-2xl hover:shadow-indigo-500/40 hover:-translate-y-1 active:scale-95"
+              >
+                Ir al Dashboard
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/register"
+                  className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-lg transition-all hover:shadow-2xl hover:shadow-indigo-500/40 hover:-translate-y-1 active:scale-95"
+                >
+                  Crear mi cuenta
+                  <ArrowRight className="h-5 w-5" />
+                </Link>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl glass border border-white/10 hover:bg-white/10 text-slate-300 font-medium text-lg transition-all"
+                >
+                  Ya tengo cuenta
+                </Link>
+              </>
+            )}
           </div>
         </FadeUp>
       </section>
