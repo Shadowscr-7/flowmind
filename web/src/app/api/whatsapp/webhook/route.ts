@@ -516,9 +516,18 @@ function resolveAccountType(input: string): string | null {
 
 // ─── Main webhook handler ─────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  // Verify the request comes from Evolution API using the shared API key
+  const incomingKey = req.headers.get("apikey");
+  if (!incomingKey || incomingKey !== EVO_KEY) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     if (body.event !== "messages.upsert") return NextResponse.json({ received: true });
+
+    // Cleanup expired pending states (fire-and-forget)
+    void db().from("whatsapp_pending").delete().lt("expires_at", new Date().toISOString());
 
     const msgData = body.data;
     if (!msgData) return NextResponse.json({ received: true });
@@ -569,6 +578,20 @@ export async function POST(req: NextRequest) {
 
     const userName = profile.display_name ?? "Usuario";
     const currency = profile.currency_default ?? "UYU";
+
+    // ── AI usage limit (500 calls/day) ────────────────────────────────────────
+    const AI_DAILY_LIMIT = 500;
+    const resetAt = profile.ai_usage_reset_at ? new Date(profile.ai_usage_reset_at) : null;
+    const now = new Date();
+    const isNewDay = !resetAt || resetAt.toDateString() !== now.toDateString();
+    const currentUsage = isNewDay ? 0 : (profile.ai_usage_count ?? 0);
+    if (currentUsage >= AI_DAILY_LIMIT) {
+      await reply(`⚠️ Alcanzaste el límite diario de consultas de IA. Se reinicia a las 00:00.`);
+      return NextResponse.json({ received: true });
+    }
+    if (isNewDay) {
+      void supabase.from("profiles").update({ ai_usage_count: 0, ai_usage_reset_at: now.toISOString() }).eq("id", userId!);
+    }
 
     // ── Check for active pending state ────────────────────────────────────────
     const { data: pending } = await supabase

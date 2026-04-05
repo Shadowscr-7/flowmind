@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -34,10 +35,22 @@ async function getPayPalSubscription(accessToken: string, subscriptionId: string
 
 export async function POST(req: NextRequest) {
   try {
+    // Authenticate caller — userId must match the authenticated session
+    const supabaseServer = await createServerClient();
+    const { data: { user: authUser } } = await supabaseServer.auth.getUser();
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { userId, subscriptionId, planType } = await req.json();
 
     if (!userId || !subscriptionId || !planType) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Prevent activating a plan for a different user
+    if (userId !== authUser.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Verify subscription with PayPal

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ALLOWED_TYPES = ["expense", "income", "transfer"] as const;
+const ALLOWED_CURRENCIES = ["UYU", "USD", "EUR", "ARS", "BRL"];
+const MAX_INPUT_LENGTH = 8000;
 
 function buildSystemPrompt(type: string, categories: { id: string; name: string }[], currency: string): string {
   const typeLabel = type === "expense" ? "GASTO" : "INGRESO";
@@ -35,16 +39,20 @@ Reglas:
 
 export async function POST(req: NextRequest) {
   if (!OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY no configurado en el servidor" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "IA no disponible" }, { status: 500 });
+  }
+
+  // Require authenticated user
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
   let body: {
     mode: "text" | "image";
     input: string;
-    type: "expense" | "income";
+    type: "expense" | "income" | "transfer";
     currency: string;
     categories: { id: string; name: string }[];
   };
@@ -59,6 +67,21 @@ export async function POST(req: NextRequest) {
 
   if (!input || !type) {
     return NextResponse.json({ error: "Faltan parámetros: input, type" }, { status: 400 });
+  }
+  if (!["text", "image"].includes(mode)) {
+    return NextResponse.json({ error: "mode inválido" }, { status: 400 });
+  }
+  if (!ALLOWED_TYPES.includes(type)) {
+    return NextResponse.json({ error: "type inválido" }, { status: 400 });
+  }
+  if (!ALLOWED_CURRENCIES.includes(currency)) {
+    return NextResponse.json({ error: "currency inválida" }, { status: 400 });
+  }
+  if (typeof input !== "string" || input.length > MAX_INPUT_LENGTH) {
+    return NextResponse.json({ error: "input demasiado largo" }, { status: 400 });
+  }
+  if (!Array.isArray(categories)) {
+    return NextResponse.json({ error: "categories inválido" }, { status: 400 });
   }
 
   const systemPrompt = buildSystemPrompt(type, categories, currency);

@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 const EVO_URL = process.env.EVOLUTION_API_URL!;
 const EVO_KEY = process.env.EVOLUTION_API_KEY!;
 const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE!;
-const ADMIN_EMAIL = "jgomez@flowmind.app";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "";
 
 async function requireAdmin() {
   const cookieStore = await cookies();

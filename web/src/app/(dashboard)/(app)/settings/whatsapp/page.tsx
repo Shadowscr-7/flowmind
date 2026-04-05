@@ -32,7 +32,7 @@ export default function WhatsAppAdminPage() {
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
-      setIsAdmin(user?.email === "jgomez@flowmind.app");
+      setIsAdmin(user?.email === (process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? ""));
     });
     // Pre-fill webhook URL
     setWebhookUrl(`${window.location.origin}/api/whatsapp/webhook`);

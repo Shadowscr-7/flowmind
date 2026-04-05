@@ -72,14 +72,16 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
   try {
-    // Verify webhook signature
-    if (PAYPAL_WEBHOOK_ID) {
-      const accessToken = await getPayPalAccessToken();
-      const isValid = await verifyWebhookSignature(accessToken, req.headers, rawBody);
-      if (!isValid) {
-        console.error("PayPal webhook: invalid signature");
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      }
+    // Verify webhook signature — always required
+    if (!PAYPAL_WEBHOOK_ID) {
+      console.error("PayPal webhook: PAYPAL_WEBHOOK_ID not configured");
+      return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+    }
+    const accessToken = await getPayPalAccessToken();
+    const isValid = await verifyWebhookSignature(accessToken, req.headers, rawBody);
+    if (!isValid) {
+      console.error("PayPal webhook: invalid signature");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     const event = JSON.parse(rawBody);

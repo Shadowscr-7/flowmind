@@ -17,7 +17,7 @@ import {
   ArrowDownLeft,
 } from "lucide-react";
 
-const ADMIN_EMAIL = "jgomez@flowmind.app";
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
 
 interface Conversation {
   phone: string;
