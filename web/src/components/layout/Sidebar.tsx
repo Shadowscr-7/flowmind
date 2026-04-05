@@ -11,6 +11,7 @@ import {
   BarChart3,
   Bell,
   Settings,
+  Zap,
   MessageSquare,
 } from "lucide-react";
 
