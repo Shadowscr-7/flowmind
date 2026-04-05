@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -222,6 +222,7 @@ function AIForm({
   onSuccess: () => void;
   onError: (m: string) => void;
 }) {
+  const supabase = useMemo(() => createClient(), []);
   const [txType, setTxType] = useState<"expense" | "income" | "transfer">("expense");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [transferToId, setTransferToId] = useState(accounts[1]?.id ?? accounts[0]?.id ?? "");
@@ -373,8 +374,8 @@ function AIForm({
   async function handleConfirm() {
     if (!editedDraft || !accountId) return;
     setConfirming(true);
+    await Promise.resolve(); // yield to browser for paint before async work
 
-    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { onError("No autenticado"); setConfirming(false); return; }
 
@@ -751,6 +752,7 @@ function ManualForm({
   onSuccess: () => void;
   onError: (m: string) => void;
 }) {
+  const supabase = useMemo(() => createClient(), []);
   const [type, setType] = useState<"expense" | "income" | "transfer">("expense");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("UYU");
@@ -770,8 +772,8 @@ function ManualForm({
       return;
     }
     setLoading(true);
+    await Promise.resolve(); // yield to browser for paint before async work
 
-    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { onError("No autenticado"); setLoading(false); return; }
 
