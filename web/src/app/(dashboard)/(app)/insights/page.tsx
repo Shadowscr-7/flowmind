@@ -76,7 +76,6 @@ export default function InsightsPage() {
   const [summary, setSummary] = useState<InsightSummary | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isPro, setIsPro] = useState(false);
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
   const [trendData, setTrendData] = useState<TrendData[]>([]);
   const [currency, setCurrency] = useState("UYU");
@@ -107,9 +106,8 @@ export default function InsightsPage() {
       .eq("id", user.id)
       .single();
     setCurrency(profile?.currency_default ?? "UYU");
-    setIsPro(profile?.plan === "pro");
 
-    const { start, end } = getMonthRange();
+const { start, end } = getMonthRange();
     const { data: txs } = await supabase
       .from("transactions")
       .select("amount, categories(id, name)")
@@ -167,7 +165,6 @@ export default function InsightsPage() {
       const json = await res.json();
       setInsights(json.insights ?? []);
       setSummary(json.summary ?? null);
-      setIsPro(json.is_pro ?? false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error desconocido");
     } finally {
@@ -223,12 +220,6 @@ export default function InsightsPage() {
 
           {error && (
             <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700">{error}</div>
-          )}
-
-          {!isPro && insights.length > 0 && (
-            <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-700">
-              Plan Free: mostrando 2 de {insights.length} insights. Actualizá a Pro para verlos todos.
-            </div>
           )}
 
           {/* Summary strip */}

@@ -1,6 +1,6 @@
 export type TransactionType = "expense" | "income" | "transfer";
 export type AccountType = "bank" | "cash" | "savings" | "investment";
-export type Plan = "free" | "pro";
+export type Plan = "pro";
 export type AlertType = "budget_exceeded" | "goal_reached" | "large_expense" | "recurring_due";
 export type RecurringFrequency = "daily" | "weekly" | "monthly" | "yearly";
 

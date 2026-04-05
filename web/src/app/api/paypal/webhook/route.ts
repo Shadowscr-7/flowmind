@@ -3,8 +3,8 @@
  *
  * Handles subscription lifecycle events from PayPal:
  * - BILLING.SUBSCRIPTION.ACTIVATED    → plan = pro
- * - BILLING.SUBSCRIPTION.CANCELLED    → plan = free, status = cancelled
- * - BILLING.SUBSCRIPTION.EXPIRED      → plan = free, status = expired
+ * - BILLING.SUBSCRIPTION.CANCELLED    → status = cancelled
+ * - BILLING.SUBSCRIPTION.EXPIRED      → status = expired
  * - BILLING.SUBSCRIPTION.SUSPENDED    → status = suspended (payment failed)
  * - PAYMENT.SALE.COMPLETED            → renew expires_at
  *
@@ -118,7 +118,6 @@ export async function POST(req: NextRequest) {
         const userId = await findUserBySubscription(subscriptionId);
         const newStatus = eventType.includes("CANCELLED") ? "cancelled" : "expired";
         if (userId) {
-          await supabase.from("profiles").update({ plan: "free" }).eq("id", userId);
           await supabase
             .from("subscriptions")
             .update({ status: newStatus })

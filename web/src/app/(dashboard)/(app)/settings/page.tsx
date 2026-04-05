@@ -225,14 +225,8 @@ export default function SettingsPage() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-slate-800 capitalize">
-                  Plan {profile?.plan ?? "free"}
-                </span>
-                <Badge
-                  variant={profile?.plan === "pro" ? "purple" : "default"}
-                >
-                  {profile?.plan === "pro" ? "Pro" : "Gratis"}
-                </Badge>
+                <span className="font-semibold text-slate-800">Plan Pro</span>
+                <Badge variant="purple">Pro</Badge>
               </div>
               <div className="text-sm text-slate-500 mt-0.5">
                 Uso de IA este mes:{" "}
@@ -242,11 +236,6 @@ export default function SettingsPage() {
                 solicitudes
               </div>
             </div>
-            {profile?.plan !== "pro" && (
-              <Button variant="secondary" size="sm">
-                Mejorar plan
-              </Button>
-            )}
           </div>
         </Card>
 

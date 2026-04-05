@@ -270,10 +270,8 @@ export default function ConversationsPage() {
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         {conv.plan && (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                            conv.plan === "pro" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
-                          }`}>
-                            {conv.plan}
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            pro
                           </span>
                         )}
                         {!conv.user_id && (
@@ -328,10 +326,8 @@ export default function ConversationsPage() {
                       {selectedConv?.display_name ?? `+${selectedPhone}`}
                     </span>
                     {selectedConv?.plan && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                        selectedConv.plan === "pro" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
-                      }`}>
-                        {selectedConv.plan}
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        pro
                       </span>
                     )}
                     {!selectedConv?.user_id && (
