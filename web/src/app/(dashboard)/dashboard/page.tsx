@@ -46,13 +46,13 @@ export default function DashboardPage() {
     const supabase = createClient();
 
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      // Use getSession (local, no network call) to avoid redirect loops
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         router.replace("/login");
         return;
       }
+      const user = session.user;
 
       const { start, end } = getMonthRange();
 

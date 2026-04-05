@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import {
@@ -262,13 +261,9 @@ export default function LandingPage() {
 
   useEffect(() => {
     createClient().auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.replace("/dashboard");
-      } else {
-        setIsLoggedIn(false);
-      }
+      setIsLoggedIn(!!session);
     });
-  }, [router]);
+  }, []);
 
   return (
     <div className="bg-slate-950 text-white overflow-x-hidden">
