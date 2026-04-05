@@ -104,7 +104,7 @@ async function whisper(audioBase64: string): Promise<string> {
   return (await res.json()).text ?? "";
 }
 
-// ─── Intent + extraction in one shot ─────────────────────────────────────────
+// ─── Intent + extraction ──────────────────────────────────────────────────────
 interface IntentResult {
   intent: "TRANSACTION" | "QUERY" | "HELP";
   transaction: {
@@ -141,14 +141,7 @@ Analizá el mensaje y respondé SOLO con JSON:
 
 TRANSACTION: registra un movimiento ("gasté", "pagué", "cobré", "ingresé", "compré")
 QUERY: pregunta sobre finanzas ("cuánto gasté", "cómo estoy", "balance", "resumen", "analiza")
-HELP: saludo, ayuda, o contenido no financiero
-
-Para query_type:
-- balance: pregunta por saldo/balance de cuentas
-- monthly_summary: resumen del mes
-- category_breakdown: en qué categorías gasta más
-- recent: transacciones recientes
-- general: análisis general o pregunta compleja`;
+HELP: saludo, ayuda, o contenido no financiero`;
 
   const raw = await gpt(system, text);
   const match = raw.match(/\{[\s\S]*\}/);
@@ -156,7 +149,7 @@ Para query_type:
   return JSON.parse(match[0]) as IntentResult;
 }
 
-// ─── Fetch user's financial context ──────────────────────────────────────────
+// ─── Fetch user financial context ─────────────────────────────────────────────
 async function getUserContext(userId: string, currency: string) {
   const supabase = db();
   const now = new Date();
@@ -166,22 +159,11 @@ async function getUserContext(userId: string, currency: string) {
   const [{ data: accounts }, { data: monthTxs }, { data: recentTxs }, { data: budgets }] =
     await Promise.all([
       supabase.from("accounts").select("name, balance, currency").eq("user_id", userId),
-      supabase
-        .from("transactions")
-        .select("type, amount, currency, category_id, categories(name)")
-        .eq("user_id", userId)
-        .gte("date", firstOfMonth)
-        .lte("date", today),
-      supabase
-        .from("transactions")
-        .select("type, amount, currency, merchant, date, categories(name)")
-        .eq("user_id", userId)
-        .order("date", { ascending: false })
-        .limit(5),
-      supabase
-        .from("budgets")
-        .select("amount, currency, categories(name)")
-        .eq("user_id", userId),
+      supabase.from("transactions").select("type, amount, currency, category_id, categories(name)")
+        .eq("user_id", userId).gte("date", firstOfMonth).lte("date", today),
+      supabase.from("transactions").select("type, amount, currency, merchant, date, categories(name)")
+        .eq("user_id", userId).order("date", { ascending: false }).limit(5),
+      supabase.from("budgets").select("amount, currency, categories(name)").eq("user_id", userId),
     ]);
 
   const totalBalance = (accounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
@@ -195,37 +177,29 @@ async function getUserContext(userId: string, currency: string) {
       catMap[name] = (catMap[name] ?? 0) + t.amount;
     }
   }
-  const topCats = Object.entries(catMap)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5)
-    .map(([n, v]) => `${n}: ${currency} ${v.toFixed(0)}`)
-    .join(", ");
+  const topCats = Object.entries(catMap).sort(([, a], [, b]) => b - a).slice(0, 5)
+    .map(([n, v]) => `${n}: ${currency} ${v.toFixed(0)}`).join(", ");
 
-  const recentStr = (recentTxs ?? [])
-    .map((t) => {
-      const cat = (t.categories as unknown as { name: string } | null)?.name ?? "";
-      const sign = t.type === "income" ? "+" : "-";
-      return `${sign}${t.currency} ${t.amount} ${t.merchant ?? cat} (${t.date?.split("T")[0] ?? ""})`;
-    })
-    .join("\n");
+  const recentStr = (recentTxs ?? []).map((t) => {
+    const cat = (t.categories as unknown as { name: string } | null)?.name ?? "";
+    const sign = t.type === "income" ? "+" : "-";
+    return `${sign}${t.currency} ${t.amount} ${t.merchant ?? cat} (${t.date?.split("T")[0] ?? ""})`;
+  }).join("\n");
 
-  const budgetStr = (budgets ?? [])
-    .map((b) => {
-      const cat = (b.categories as unknown as { name: string } | null)?.name ?? "Sin cat";
-      return `${cat}: límite ${b.currency} ${b.amount}`;
-    })
-    .join(", ");
+  const budgetStr = (budgets ?? []).map((b) => {
+    const cat = (b.categories as unknown as { name: string } | null)?.name ?? "Sin cat";
+    return `${cat}: límite ${b.currency} ${b.amount}`;
+  }).join(", ");
 
   return {
     balanceLine: `Balance total: ${currency} ${totalBalance.toFixed(2)} (${(accounts ?? []).map((a) => `${a.name}: ${a.currency} ${a.balance}`).join(", ")})`,
-    monthLine: `Este mes — Ingresos: ${currency} ${monthIncome.toFixed(2)} | Gastos: ${currency} ${monthExpense.toFixed(2)} | Neto: ${currency} (monthIncome - monthExpense).toFixed(2)}`,
+    monthLine: `Este mes — Ingresos: ${currency} ${monthIncome.toFixed(2)} | Gastos: ${currency} ${monthExpense.toFixed(2)} | Neto: ${currency} ${(monthIncome - monthExpense).toFixed(2)}`,
     topCatsLine: `Top categorías de gasto: ${topCats || "sin datos"}`,
     recentLine: `Últimas transacciones:\n${recentStr || "ninguna"}`,
     budgetLine: `Presupuestos: ${budgetStr || "no configurados"}`,
   };
 }
 
-// ─── Generate AI query response ───────────────────────────────────────────────
 async function answerQuery(question: string, ctx: Awaited<ReturnType<typeof getUserContext>>, userName: string) {
   const system = `Sos FlowMind AI, asistente financiero personal de ${userName}.
 Respondé de forma amigable y concisa (máx 200 palabras) en español usando los datos del usuario.
@@ -237,7 +211,6 @@ ${ctx.monthLine}
 ${ctx.topCatsLine}
 ${ctx.recentLine}
 ${ctx.budgetLine}`;
-
   return await gpt(system, question);
 }
 
@@ -246,13 +219,68 @@ async function resolveCategoryId(userId: string, categoryName: string | null): P
   if (!categoryName) return null;
   const supabase = db();
   const { data } = await supabase
-    .from("categories")
-    .select("id")
+    .from("categories").select("id")
     .or(`user_id.eq.${userId},user_id.is.null`)
     .ilike("name", `%${categoryName}%`)
-    .limit(1)
-    .single();
+    .limit(1).single();
   return data?.id ?? null;
+}
+
+// ─── Insert transaction ───────────────────────────────────────────────────────
+interface TxPayload {
+  type: "expense" | "income";
+  amount: number;
+  currency: string;
+  merchant: string | null;
+  date: string;
+  category: string | null;
+  notes: string | null;
+  source: string;
+}
+
+async function insertTransaction(
+  userId: string,
+  accountId: string,
+  accountName: string,
+  tx: TxPayload,
+  currency: string,
+  rawPhone: string,
+  sendReply: (text: string, opts?: { intent?: string; transactionId?: string }) => Promise<void>
+) {
+  const categoryId = await resolveCategoryId(userId, tx.category);
+  const { data: saved, error: txErr } = await db().from("transactions").insert({
+    user_id: userId,
+    account_id: accountId,
+    type: tx.type,
+    amount: tx.amount,
+    currency: tx.currency ?? currency,
+    date: tx.date ?? new Date().toISOString().split("T")[0],
+    merchant: tx.merchant ?? null,
+    category_id: categoryId,
+    notes: tx.notes ?? null,
+    source: tx.source,
+    confidence: 0.9,
+    is_confirmed: true,
+  }).select().single();
+
+  if (txErr || !saved) {
+    await sendReply("❌ Error al guardar. Intentá de nuevo.");
+    return;
+  }
+
+  const emoji = tx.type === "income" ? "💰" : "💸";
+  const typeLabel = tx.type === "income" ? "Ingreso" : "Gasto";
+  const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
+
+  await sendReply(
+    `${emoji} *${typeLabel} guardado* en ${accountName}\n\n` +
+    `📌 *${tx.merchant ?? tx.category ?? "Sin descripción"}*\n` +
+    `💵 ${tx.currency ?? currency} ${amt}\n` +
+    `📅 ${tx.date ?? "hoy"}\n` +
+    (tx.notes ? `📝 ${tx.notes}\n` : "") +
+    `\n✅ Registrado exitosamente`,
+    { intent: "TRANSACTION", transactionId: saved.id }
+  );
 }
 
 // ─── Main webhook handler ─────────────────────────────────────────────────────
@@ -267,7 +295,6 @@ export async function POST(req: NextRequest) {
     const msgData = body.data;
     if (!msgData) return NextResponse.json({ received: true });
 
-    // Skip outbound and group messages
     if (msgData.key?.fromMe === true) return NextResponse.json({ received: true });
     const remoteJid: string = msgData.key?.remoteJid ?? "";
     if (remoteJid.endsWith("@g.us")) return NextResponse.json({ received: true });
@@ -278,16 +305,14 @@ export async function POST(req: NextRequest) {
 
     const supabase = db();
 
-    // Determine message type and content
     const messageContent = msgData.message;
     const textContent: string | null =
       messageContent?.conversation ?? messageContent?.extendedTextMessage?.text ?? null;
     const hasImage = !!(messageContent?.imageMessage ?? messageContent?.documentMessage);
     const hasAudio = !!(messageContent?.audioMessage ?? messageContent?.pttMessage);
-
     const inboundType: "text" | "audio" | "image" = hasAudio ? "audio" : hasImage ? "image" : "text";
 
-    // Find user by phone
+    // Find user
     const { data: profile } = await supabase
       .from("profiles")
       .select("id, display_name, currency_default, plan, ai_usage_count, ai_usage_reset_at")
@@ -296,26 +321,13 @@ export async function POST(req: NextRequest) {
 
     const userId = profile?.id ?? null;
 
-    // Log inbound message (fire-and-forget)
-    void logMsg({
-      userId,
-      phone: rawPhone,
-      direction: "inbound",
-      messageType: inboundType,
-      content: textContent,
-    });
+    void logMsg({ userId, phone: rawPhone, direction: "inbound", messageType: inboundType, content: textContent });
 
-    // Helper: send + log outbound
     const reply = async (text: string, opts?: { intent?: string; transactionId?: string }) => {
       await sendWA(rawPhone, text);
       void logMsg({
-        userId,
-        phone: rawPhone,
-        direction: "outbound",
-        messageType: "text",
-        content: text,
-        intent: opts?.intent ?? null,
-        transactionId: opts?.transactionId ?? null,
+        userId, phone: rawPhone, direction: "outbound", messageType: "text",
+        content: text, intent: opts?.intent ?? null, transactionId: opts?.transactionId ?? null,
       });
     };
 
@@ -323,13 +335,13 @@ export async function POST(req: NextRequest) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
       await reply(
         `👋 ¡Hola! No encontré una cuenta de *FlowMind* asociada a este número (${phoneWithPlus}).\n\n` +
-          `*¿Aún no tenés cuenta?*\n` +
-          `Registrarte es fácil — al crear tu cuenta podés ingresar este número y empezar a usarme al instante:\n` +
-          `👉 ${appUrl}/register\n\n` +
-          `*¿Ya tenés cuenta?*\n` +
-          `Vinculá este número desde la app:\n` +
-          `Configuración → WhatsApp → ingresá *${phoneWithPlus}*\n\n` +
-          `Después podés mandarme tus gastos, ingresos y fotos de tickets directamente por acá 💸`
+        `*¿Aún no tenés cuenta?*\n` +
+        `Registrarte es fácil — al crear tu cuenta podés ingresar este número y empezar a usarme al instante:\n` +
+        `👉 ${appUrl}/register\n\n` +
+        `*¿Ya tenés cuenta?*\n` +
+        `Vinculá este número desde la app:\n` +
+        `Configuración → WhatsApp → ingresá *${phoneWithPlus}*\n\n` +
+        `Después podés mandarme tus gastos, ingresos y fotos de tickets directamente por acá 💸`
       );
       return NextResponse.json({ received: true });
     }
@@ -337,18 +349,58 @@ export async function POST(req: NextRequest) {
     const userName = profile.display_name ?? "Usuario";
     const currency = profile.currency_default ?? "UYU";
 
-    // Get default account
-    const { data: accounts } = await supabase
+    // ── Check for pending account selection ───────────────────────────────────
+    const { data: pending } = await supabase
+      .from("whatsapp_pending")
+      .select("*")
+      .eq("phone", rawPhone)
+      .eq("pending_type", "account_selection")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pending && textContent) {
+      const choice = parseInt(textContent.trim(), 10);
+      const accounts: { id: string; name: string }[] = pending.payload.accounts ?? [];
+
+      if (!isNaN(choice) && choice >= 1 && choice <= accounts.length) {
+        // Valid choice — complete the transaction
+        const selectedAccount = accounts[choice - 1];
+        const txData: TxPayload = pending.payload;
+
+        // Delete the pending state
+        await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+
+        await insertTransaction(userId!, selectedAccount.id, selectedAccount.name, txData, currency, rawPhone, reply);
+        await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
+        return NextResponse.json({ received: true });
+      } else {
+        // Invalid choice
+        const list = accounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+        await reply(`❓ Opción inválida. Respondé con el número de la cuenta:\n\n${list}`);
+        return NextResponse.json({ received: true });
+      }
+    }
+
+    // ── Get all user accounts ─────────────────────────────────────────────────
+    const { data: allAccounts } = await supabase
       .from("accounts")
       .select("id, name, currency")
       .eq("user_id", userId)
       .order("is_primary", { ascending: false })
-      .order("created_at", { ascending: true })
-      .limit(1);
+      .order("created_at", { ascending: true });
 
-    const defaultAccount = accounts?.[0];
-    if (!defaultAccount) {
-      await reply("❌ No tenés cuentas configuradas. Creá una desde la app web primero.");
+    // ── No accounts configured ────────────────────────────────────────────────
+    if (!allAccounts || allAccounts.length === 0) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
+      await reply(
+        `⚠️ *No tenés cuentas configuradas aún.*\n\n` +
+        `Para empezar a registrar tus movimientos, primero necesitás crear al menos una cuenta (ej: Efectivo, Banco, Billetera).\n\n` +
+        `Hacelo fácilmente desde la app:\n` +
+        `👉 ${appUrl}/accounts\n\n` +
+        `Una vez que tengas una cuenta creada, podés mandarme tus gastos e ingresos directamente por acá 💸`
+      );
       return NextResponse.json({ received: true });
     }
 
@@ -365,14 +417,7 @@ export async function POST(req: NextRequest) {
       try {
         processedText = await whisper(audioB64);
         source = "whatsapp_voice";
-        // Update inbound log with transcription
-        void logMsg({
-          userId,
-          phone: rawPhone,
-          direction: "inbound",
-          messageType: "audio",
-          content: processedText,
-        });
+        void logMsg({ userId, phone: rawPhone, direction: "inbound", messageType: "audio", content: processedText });
         await reply(`🎤 _Transcripción: "${processedText}"_\n\nProcesando...`);
       } catch {
         await reply("❌ Error transcribiendo el audio. Intentá por texto.");
@@ -380,7 +425,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Image: analyze receipt with vision ────────────────────────────────────
+    // ── Image: analyze receipt ────────────────────────────────────────────────
     if (hasImage) {
       const imgB64 = await downloadMedia(remoteJid, msgData.key?.id ?? "");
       if (!imgB64) {
@@ -410,44 +455,44 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
           return NextResponse.json({ received: true });
         }
 
-        const categoryId = await resolveCategoryId(userId!, parsed.category);
-        const { data: tx, error: txErr } = await supabase.from("transactions").insert({
-          user_id: userId,
-          account_id: defaultAccount.id,
-          type: parsed.type ?? "expense",
-          amount: parsed.amount,
-          currency: parsed.currency ?? currency,
-          date: parsed.date ?? new Date().toISOString().split("T")[0],
-          merchant: parsed.merchant ?? null,
-          category_id: categoryId,
-          notes: parsed.notes ?? null,
-          source: "whatsapp_image",
-          confidence: 0.85,
-          is_confirmed: true,
-        }).select().single();
-
-        if (txErr || !tx) throw new Error(txErr?.message ?? "insert error");
-
-        const emoji = "💸";
-        const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(parsed.amount);
-        const responseText =
-          `${emoji} *Ticket guardado* en ${defaultAccount.name}\n\n` +
-          `🏪 *${parsed.merchant ?? "Sin comercio"}*\n` +
-          `💵 ${parsed.currency ?? currency} ${amt}\n` +
-          `📅 ${parsed.date ?? "hoy"}\n` +
-          (parsed.notes ? `📝 ${parsed.notes}\n` : "") +
-          `\n✅ Guardado exitosamente`;
-
-        await sendWA(rawPhone, responseText);
-        void logMsg({
-          userId,
-          phone: rawPhone,
-          direction: "outbound",
-          messageType: "text",
-          content: responseText,
-          intent: "TRANSACTION",
-          transactionId: tx.id,
-        });
+        // Account selection for image transactions
+        if (allAccounts.length === 1) {
+          const acc = allAccounts[0];
+          const txPayload: TxPayload = {
+            type: parsed.type ?? "expense",
+            amount: parsed.amount,
+            currency: parsed.currency ?? currency,
+            merchant: parsed.merchant ?? null,
+            date: parsed.date ?? today,
+            category: parsed.category ?? null,
+            notes: parsed.notes ?? null,
+            source: "whatsapp_image",
+          };
+          await insertTransaction(userId!, acc.id, acc.name, txPayload, currency, rawPhone, reply);
+        } else {
+          const accountList = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+          const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(parsed.amount);
+          await supabase.from("whatsapp_pending").insert({
+            phone: rawPhone,
+            user_id: userId,
+            pending_type: "account_selection",
+            payload: {
+              type: parsed.type ?? "expense",
+              amount: parsed.amount,
+              currency: parsed.currency ?? currency,
+              merchant: parsed.merchant ?? null,
+              date: parsed.date ?? today,
+              category: parsed.category ?? null,
+              notes: parsed.notes ?? null,
+              source: "whatsapp_image",
+              accounts: allAccounts.map((a) => ({ id: a.id, name: a.name })),
+            },
+          });
+          await reply(
+            `🧾 *Ticket detectado:* ${parsed.merchant ?? "Sin comercio"} — ${parsed.currency ?? currency} ${amt}\n\n` +
+            `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número de la cuenta._`
+          );
+        }
 
         await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
         return NextResponse.json({ received: true });
@@ -458,7 +503,7 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
       }
     }
 
-    // ── Text / transcribed audio: classify intent ─────────────────────────────
+    // ── Text / transcribed audio ──────────────────────────────────────────────
     if (!processedText?.trim()) {
       return NextResponse.json({ received: true });
     }
@@ -467,71 +512,55 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
     if (lowerText === "ayuda" || lowerText === "help" || lowerText === "?") {
       await reply(
         `👋 Hola *${userName}*! Podés hacer:\n\n` +
-          `💸 *Registrar gastos:*\n  "Gasté 500 en el super"\n  "Almuerzo 350 pesos"\n\n` +
-          `💰 *Registrar ingresos:*\n  "Cobré el sueldo 45000"\n  "Ingresé 5000 freelance"\n\n` +
-          `📸 *Ticket/Factura:*\n  Mandá una foto y lo proceso\n\n` +
-          `🎤 *Audio:*\n  Mandá una nota de voz\n\n` +
-          `📊 *Consultas:*\n  "¿Cuánto gasté este mes?"\n  "¿Cómo está mi balance?"\n  "Dame un análisis"`,
+        `💸 *Registrar gastos:*\n  "Gasté 500 en el super"\n  "Almuerzo 350 pesos"\n\n` +
+        `💰 *Registrar ingresos:*\n  "Cobré el sueldo 45000"\n  "Ingresé 5000 freelance"\n\n` +
+        `📸 *Ticket/Factura:*\n  Mandá una foto y lo proceso\n\n` +
+        `🎤 *Audio:*\n  Mandá una nota de voz\n\n` +
+        `📊 *Consultas:*\n  "¿Cuánto gasté este mes?"\n  "¿Cómo está mi balance?"\n  "Dame un análisis"`,
         { intent: "HELP" }
       );
       return NextResponse.json({ received: true });
     }
 
-    // Classify intent
     const intent = await classifyMessage(processedText, currency);
     await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
 
     // ── TRANSACTION ───────────────────────────────────────────────────────────
     if (intent.intent === "TRANSACTION" && intent.transaction) {
       const tx = intent.transaction;
-      const categoryId = await resolveCategoryId(userId!, tx.category);
 
-      const { data: saved, error: txErr } = await supabase.from("transactions").insert({
-        user_id: userId,
-        account_id: defaultAccount.id,
-        type: tx.type,
-        amount: tx.amount,
-        currency: tx.currency ?? currency,
-        date: tx.date ?? new Date().toISOString().split("T")[0],
-        merchant: tx.merchant ?? null,
-        category_id: categoryId,
-        notes: tx.notes ?? null,
-        source,
-        confidence: 0.9,
-        is_confirmed: true,
-      }).select().single();
+      if (allAccounts.length === 1) {
+        // Only one account — use it directly
+        const acc = allAccounts[0];
+        await insertTransaction(userId!, acc.id, acc.name, { ...tx, source }, currency, rawPhone, reply);
+      } else {
+        // Multiple accounts — ask user to choose
+        const accountList = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+        const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
+        const typeLabel = tx.type === "income" ? "Ingreso" : "Gasto";
+        const emoji = tx.type === "income" ? "💰" : "💸";
 
-      if (txErr || !saved) {
-        await reply("❌ Error al guardar. Intentá de nuevo.");
-        return NextResponse.json({ received: true });
+        await supabase.from("whatsapp_pending").insert({
+          phone: rawPhone,
+          user_id: userId,
+          pending_type: "account_selection",
+          payload: {
+            ...tx,
+            source,
+            accounts: allAccounts.map((a) => ({ id: a.id, name: a.name })),
+          },
+        });
+
+        await reply(
+          `${emoji} *${typeLabel} detectado:* ${tx.merchant ?? tx.category ?? "Sin descripción"} — ${tx.currency ?? currency} ${amt}\n\n` +
+          `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número de la cuenta._`
+        );
       }
-
-      const emoji = tx.type === "income" ? "💰" : "💸";
-      const typeLabel = tx.type === "income" ? "Ingreso" : "Gasto";
-      const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
-      const responseText =
-        `${emoji} *${typeLabel} guardado* en ${defaultAccount.name}\n\n` +
-        `📌 *${tx.merchant ?? tx.category ?? "Sin descripción"}*\n` +
-        `💵 ${tx.currency ?? currency} ${amt}\n` +
-        `📅 ${tx.date ?? "hoy"}\n` +
-        (tx.notes ? `📝 ${tx.notes}\n` : "") +
-        `\n✅ Registrado exitosamente`;
-
-      await sendWA(rawPhone, responseText);
-      void logMsg({
-        userId,
-        phone: rawPhone,
-        direction: "outbound",
-        messageType: "text",
-        content: responseText,
-        intent: "TRANSACTION",
-        transactionId: saved.id,
-      });
 
       return NextResponse.json({ received: true });
     }
 
-    // ── QUERY (AI agent) ──────────────────────────────────────────────────────
+    // ── QUERY ─────────────────────────────────────────────────────────────────
     if (intent.intent === "QUERY") {
       const ctx = await getUserContext(userId!, currency);
       const answer = await answerQuery(processedText, ctx, userName);
@@ -549,11 +578,10 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
     return NextResponse.json({ received: true });
   } catch (err) {
     console.error("WhatsApp webhook error:", err);
-    return NextResponse.json({ received: true }); // always 200 to Evolution
+    return NextResponse.json({ received: true });
   }
 }
 
-// Evolution does GET health checks sometimes
 export async function GET() {
   return NextResponse.json({ status: "ok" });
 }
