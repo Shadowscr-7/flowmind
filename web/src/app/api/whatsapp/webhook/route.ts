@@ -877,7 +877,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
     // Fetch recent transactions for context
     const { data: recentForContext } = await supabase
       .from("transactions")
-      .select("id, type, amount, currency, merchant, date, accounts(name)")
+      .select("id, type, amount, currency, merchant, date, accounts!account_id(name)")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(5);
@@ -1040,7 +1040,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       // Get last transaction (or search by amount if specified)
       let lastTxQuery = supabase
         .from("transactions")
-        .select("id, type, amount, currency, merchant, category_id, account_id, accounts(name)")
+        .select("id, type, amount, currency, merchant, category_id, account_id, accounts!account_id(name)")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(1);

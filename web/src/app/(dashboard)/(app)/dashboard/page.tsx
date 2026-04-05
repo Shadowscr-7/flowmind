@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
       const { data: recent } = await supabase
         .from("transactions")
-        .select("*, accounts(id, name), categories(id, name, icon, color)")
+        .select("*, accounts!account_id(id, name), categories(id, name, icon, color)")
         .order("date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(5);

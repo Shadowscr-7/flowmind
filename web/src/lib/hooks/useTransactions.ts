@@ -36,7 +36,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
 
     let query = supabase
       .from("transactions")
-      .select("*, accounts(id, name, type), categories(id, name, icon, color)", { count: "exact" })
+      .select("*, accounts!account_id(id, name, type), categories(id, name, icon, color)", { count: "exact" })
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
 
@@ -76,7 +76,7 @@ export function useRecentTransactions(limit = 5) {
     async function fetch() {
       const { data } = await supabase
         .from("transactions")
-        .select("*, accounts(id, name, type), categories(id, name, icon, color)")
+        .select("*, accounts!account_id(id, name, type), categories(id, name, icon, color)")
         .order("date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(limit);
