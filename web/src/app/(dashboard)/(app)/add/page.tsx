@@ -54,12 +54,14 @@ async function saveTransaction(
     category_id: string | null;
     notes: string | null;
     account_id: string;
+    transfer_to_account_id?: string | null;
     source: string;
   }
 ) {
   const { error } = await supabase.from("transactions").insert({
     user_id: userId,
     account_id: payload.account_id,
+    transfer_to_account_id: payload.transfer_to_account_id ?? null,
     type: payload.type,
     amount: payload.amount,
     currency: payload.currency || "UYU",
@@ -117,7 +119,7 @@ export default function AddPage() {
     async function loadMeta() {
       const [{ data: cats }, { data: accs }] = await Promise.all([
         supabase.from("categories").select("*").order("sort_order").order("name"),
-        supabase.from("accounts").select("*").order("name"),
+        supabase.from("accounts").select("*").eq("is_active", true).order("name"),
       ]);
       setCategories((cats as Category[]) ?? []);
       setAccounts((accs as Account[]) ?? []);
@@ -220,8 +222,9 @@ function AIForm({
   onSuccess: () => void;
   onError: (m: string) => void;
 }) {
-  const [txType, setTxType] = useState<"expense" | "income">("expense");
+  const [txType, setTxType] = useState<"expense" | "income" | "transfer">("expense");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [transferToId, setTransferToId] = useState(accounts[1]?.id ?? accounts[0]?.id ?? "");
   const [inputMode, setInputMode] = useState<InputMode>("text");
 
   // Text
@@ -245,7 +248,7 @@ function AIForm({
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const filteredCategories = categories.filter((c) =>
-    txType === "expense" ? c.type === "expense" : c.type === "income"
+    txType === "income" ? c.type === "income" : c.type === "expense"
   );
 
   // ── Image handlers ───────────────────────────────────────
@@ -385,6 +388,7 @@ function AIForm({
       await saveTransaction(supabase, user.id, {
         ...editedDraft,
         account_id: accountId,
+        transfer_to_account_id: txType === "transfer" ? transferToId || null : null,
         source: sourceMap[inputMode],
       });
       onSuccess();
@@ -491,10 +495,13 @@ function AIForm({
     );
   }
 
+  const transferValid = txType !== "transfer" || (!!transferToId && transferToId !== accountId);
+
   const canAnalyze =
-    (inputMode === "text" && text.trim().length > 0) ||
+    transferValid &&
+    ((inputMode === "text" && text.trim().length > 0) ||
     (inputMode === "audio" && transcript.trim().length > 0) ||
-    (inputMode === "image" && !!imageFile);
+    (inputMode === "image" && !!imageFile));
 
   return (
     <div className="space-y-4">
@@ -502,7 +509,7 @@ function AIForm({
         {/* ── Type toggle ── */}
         <div className="mb-5">
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            ¿Es un gasto o un ingreso?
+            Tipo de movimiento
           </label>
           <div className="flex rounded-xl border-2 overflow-hidden">
             <button
@@ -527,13 +534,24 @@ function AIForm({
             >
               💰 Ingreso
             </button>
+            <button
+              type="button"
+              onClick={() => setTxType("transfer")}
+              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+                txType === "transfer"
+                  ? "bg-blue-500 text-white"
+                  : "text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              🔄 Transferencia
+            </button>
           </div>
         </div>
 
-        {/* ── Account ── */}
-        <div className="mb-5">
+        {/* ── Account(s) ── */}
+        <div className="mb-5 space-y-3">
           <Select
-            label="Cuenta"
+            label={txType === "transfer" ? "Cuenta origen" : "Cuenta"}
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
           >
@@ -543,6 +561,19 @@ function AIForm({
               </option>
             ))}
           </Select>
+          {txType === "transfer" && (
+            <Select
+              label="Cuenta destino"
+              value={transferToId}
+              onChange={(e) => setTransferToId(e.target.value)}
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id} disabled={a.id === accountId}>
+                  {a.name} — {a.currency}
+                </option>
+              ))}
+            </Select>
+          )}
         </div>
 
         {/* ── Input mode tabs ── */}
@@ -675,10 +706,11 @@ function AIForm({
                 </span>
                 <span
                   className={`text-base font-bold ${
-                    editedDraft.type === "income" ? "text-emerald-600" : "text-red-600"
+                    editedDraft.type === "income" ? "text-emerald-600" :
+                    editedDraft.type === "transfer" ? "text-blue-600" : "text-red-600"
                   }`}
                 >
-                  {editedDraft.type === "income" ? "+" : "−"}
+                  {editedDraft.type === "income" ? "+" : editedDraft.type === "transfer" ? "⇄" : "−"}
                   {formatCurrency(editedDraft.amount, editedDraft.currency)}
                 </span>
               </div>
@@ -726,12 +758,17 @@ function ManualForm({
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [categoryId, setCategoryId] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [transferToId, setTransferToId] = useState(accounts[1]?.id ?? accounts[0]?.id ?? "");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!accountId || !amount) return;
+    if (type === "transfer" && (!transferToId || transferToId === accountId)) {
+      onError("Seleccioná una cuenta destino diferente a la cuenta origen");
+      return;
+    }
     setLoading(true);
 
     const supabase = createClient();
@@ -748,6 +785,7 @@ function ManualForm({
         category_id: categoryId || null,
         notes: notes || null,
         account_id: accountId,
+        transfer_to_account_id: type === "transfer" ? transferToId : null,
         source: "manual",
       });
       onSuccess();
@@ -827,7 +865,7 @@ function ManualForm({
 
         <div className="grid grid-cols-2 gap-3">
           <Select
-            label="Cuenta"
+            label={type === "transfer" ? "Cuenta origen" : "Cuenta"}
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
             required
@@ -838,14 +876,27 @@ function ManualForm({
             ))}
           </Select>
 
-          <Select label="Categoría" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Sin categoría</option>
-            {filteredCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.icon} {c.name}
-              </option>
-            ))}
-          </Select>
+          {type === "transfer" ? (
+            <Select
+              label="Cuenta destino"
+              value={transferToId}
+              onChange={(e) => setTransferToId(e.target.value)}
+              required
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id} disabled={a.id === accountId}>{a.name}</option>
+              ))}
+            </Select>
+          ) : (
+            <Select label="Categoría" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              <option value="">Sin categoría</option>
+              {filteredCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon} {c.name}
+                </option>
+              ))}
+            </Select>
+          )}
         </div>
 
         <Textarea
