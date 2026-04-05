@@ -7,6 +7,7 @@ const OPENAI_KEY = process.env.OPENAI_API_KEY!;
 const EVO_URL = process.env.EVOLUTION_API_URL!;
 const EVO_KEY = process.env.EVOLUTION_API_KEY!;
 const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE!;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
 
 function db() {
   return createClient(SB_URL, SB_SERVICE_KEY);
@@ -74,7 +75,7 @@ async function gpt(system: string, user: string | object[], model = "gpt-4o-mini
     headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      max_tokens: 700,
+      max_tokens: 800,
       temperature: 0.2,
       messages: [
         { role: "system", content: system },
@@ -94,7 +95,6 @@ async function whisper(audioBase64: string): Promise<string> {
   form.append("file", blob, "audio.ogg");
   form.append("model", "whisper-1");
   form.append("language", "es");
-
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_KEY}` },
@@ -104,9 +104,27 @@ async function whisper(audioBase64: string): Promise<string> {
   return (await res.json()).text ?? "";
 }
 
-// ─── Intent + extraction ──────────────────────────────────────────────────────
+// ─── Intent classification ────────────────────────────────────────────────────
+interface RecentTx {
+  id: string;
+  type: string;
+  amount: number;
+  currency: string;
+  merchant: string | null;
+  date: string;
+  account_name: string | null;
+}
+
+interface AccountInfo {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  currency: string;
+}
+
 interface IntentResult {
-  intent: "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION";
+  intent: "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION";
   transaction: {
     type: "expense" | "income";
     amount: number;
@@ -122,80 +140,100 @@ interface IntentResult {
     account_name: string | null;
     new_amount: number | null;
   } | null;
+  account_creation: {
+    name: string | null;
+    type: "bank" | "cash" | "savings" | "investment" | null;
+    currency: string | null;
+  } | null;
 }
 
-interface RecentTx {
-  id: string;
-  type: string;
-  amount: number;
-  currency: string;
-  merchant: string | null;
-  date: string;
-  account_name: string | null;
-}
-
-async function classifyMessage(text: string, currency: string, recentTxs: RecentTx[] = []): Promise<IntentResult> {
+async function classifyMessage(
+  text: string,
+  currency: string,
+  recentTxs: RecentTx[] = [],
+  userAccounts: AccountInfo[] = []
+): Promise<IntentResult> {
   const today = new Date().toISOString().split("T")[0];
 
   const recentContext = recentTxs.length > 0
-    ? `\nÚLTIMOS MOVIMIENTOS REGISTRADOS (del más reciente al más antiguo):\n` +
-      recentTxs.map((t, i) =>
-        `${i + 1}. ${t.type === "income" ? "Ingreso" : "Gasto"} de ${t.currency} ${t.amount}` +
-        `${t.merchant ? ` en ${t.merchant}` : ""}` +
-        ` (cuenta: ${t.account_name ?? "desconocida"}, fecha: ${t.date})`
+    ? `\nÚLTIMOS MOVIMIENTOS:\n` + recentTxs.map((t, i) =>
+        `  ${i + 1}. ${t.type === "income" ? "Ingreso" : "Gasto"} ${t.currency} ${t.amount}` +
+        `${t.merchant ? ` (${t.merchant})` : ""} — cuenta: ${t.account_name ?? "?"}, fecha: ${t.date}`
       ).join("\n")
     : "";
 
-  const system = `Eres FlowMind AI procesando mensajes de WhatsApp de finanzas personales.
-Fecha hoy: ${today}. Moneda por defecto: ${currency}.
-${recentContext}
+  const accountsContext = userAccounts.length > 0
+    ? `\nCUENTAS DEL USUARIO:\n` + userAccounts.map(a =>
+        `  - ${a.name} (${a.type}, saldo: ${a.currency} ${a.balance})`
+      ).join("\n")
+    : "\nEl usuario NO tiene cuentas configuradas aún.";
 
-Tu tarea es entender el INTENTO real del usuario aunque use lenguaje coloquial, informal o indirecto en español.
-Respondé SOLO con JSON válido, sin texto adicional:
+  const system = `Eres FlowMind AI, asistente financiero personal. Procesás mensajes de WhatsApp en español rioplatense.
+Fecha hoy: ${today}. Moneda por defecto del usuario: ${currency}.
+${recentContext}
+${accountsContext}
+
+Analizá el INTENTO REAL del usuario aunque use lenguaje coloquial, indirecto o impreciso.
+Respondé ÚNICAMENTE con JSON válido (sin texto extra, sin markdown):
+
 {
-  "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION",
-  "transaction": {
-    "type": "expense" | "income",
-    "amount": number,
-    "currency": "${currency}",
-    "merchant": string | null,
-    "date": "YYYY-MM-DD",
-    "category": string | null,
-    "notes": string | null
-  } | null,
-  "query_type": "balance" | "monthly_summary" | "category_breakdown" | "recent" | "general" | null,
-  "correction": {
-    "action": "change_account" | "delete" | "change_amount",
-    "account_name": string | null,
-    "new_amount": number | null
-  } | null
+  "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION",
+  "transaction": { "type": "expense"|"income", "amount": number, "currency": string, "merchant": string|null, "date": "YYYY-MM-DD", "category": string|null, "notes": string|null } | null,
+  "query_type": "balance"|"monthly_summary"|"category_breakdown"|"recent"|"general" | null,
+  "correction": { "action": "change_account"|"delete"|"change_amount", "account_name": string|null, "new_amount": number|null } | null,
+  "account_creation": { "name": string|null, "type": "bank"|"cash"|"savings"|"investment"|null, "currency": string|null } | null
 }
 
-TRANSACTION: el usuario registra un movimiento de dinero.
-  Ejemplos: "gasté 500 en el super", "pagué el alquiler", "cobré el sueldo", "me depositaron 45000", "almorcé y pagué 350"
+── INTENTS ──────────────────────────────────────────────────────────────────
 
-QUERY: el usuario pregunta sobre sus finanzas.
-  Ejemplos: "cuánto gasté?", "cómo estoy?", "dame un resumen", "en qué gasté más?", "cuál es mi balance?"
+TRANSACTION — el usuario reporta un movimiento de dinero.
+  "gasté 500 en el super" → expense 500
+  "pagué el alquiler 15000" → expense 15000
+  "cobré el sueldo 45000" → income 45000
+  "me transfirieron 8000" → income 8000
+  "almorcé y pagué 350 con tarjeta" → expense 350
 
-CORRECTION: el usuario quiere corregir, mover, eliminar o modificar un movimiento ya registrado.
-  Puede referirse al último movimiento de forma implícita o explícita.
-  Ejemplos:
-  - "eso no era del efectivo, es de Santander" → change_account, account_name: "Santander"
-  - "el dinero que registré en efectivo es en realidad de mi cuenta Santander" → change_account, account_name: "Santander"
-  - "ese ingreso ponelo en el banco" → change_account, account_name: "banco"
-  - "me equivoqué de cuenta, era la del Itaú" → change_account, account_name: "Itaú"
-  - "borrá eso" / "eliminá el último" / "no era correcto" → delete
-  - "el monto estaba mal, eran 800" → change_amount, new_amount: 800
-  - "en realidad fueron 1200 no 1000" → change_amount, new_amount: 1200
+QUERY — el usuario pregunta sobre sus finanzas o pide análisis.
+  "cuánto gasté este mes?" → monthly_summary
+  "cómo estoy?" → general
+  "cuál es mi saldo?" → balance
+  "en qué gasté más?" → category_breakdown
+  "mostrá los últimos movimientos" → recent
 
-HELP: saludos, ayuda general, preguntas sobre cómo funciona, contenido no financiero.
+CORRECTION — el usuario quiere corregir o modificar algo ya registrado.
+  Puede ser implícito o referirse a movimientos anteriores.
+  "eso no era del efectivo, es de Santander" → change_account "Santander"
+  "el dinero que registré como efectivo es de mi cuenta banco" → change_account "banco"
+  "ese balance de 92000 que pusiste en efectivo es en realidad de Santander" → change_account "Santander"
+  "ese ingreso ponelo en la cuenta del Itaú" → change_account "Itaú"
+  "me equivoqué de cuenta" → change_account (account_name: null si no especifica)
+  "borrá el último" / "eliminá eso" / "no, estaba mal" → delete
+  "el monto era 800 no 500" → change_amount 800
 
-Ante la duda entre CORRECTION y HELP: si el usuario menciona cuentas, montos anteriores o hace referencia a algo ya registrado, elegí CORRECTION.`;
+ACCOUNT_CREATION — el usuario quiere crear o agregar una cuenta/billetera.
+  "quiero crear una cuenta en Santander" → name: "Santander", type: "bank"
+  "ayudame a agregar mi cuenta del banco BROU" → name: "BROU", type: "bank"
+  "necesito agregar una billetera virtual" → name: null, type: null (preguntar)
+  "quiero agregar mi efectivo" → name: "Efectivo", type: "cash"
+  "tengo una caja de ahorro en el Itaú" → name: "Itaú", type: "savings"
+  "crear cuenta" → name: null, type: null
+
+HELP — saludos, preguntas de uso, contenido no financiero.
+
+── REGLAS DE DESEMPATE ──────────────────────────────────────────────────────
+- Si el usuario menciona el nombre de un banco o cuenta + "es en realidad" / "no era" / "ponelo en" → CORRECTION
+- Si el usuario dice "crear", "agregar", "añadir" + cuenta/banco/billetera → ACCOUNT_CREATION
+- Si hay duda entre CORRECTION y HELP y hay mención de cuentas o montos → CORRECTION
+- Si hay duda entre ACCOUNT_CREATION y HELP → ACCOUNT_CREATION`;
 
   const raw = await gpt(system, text, "gpt-4o");
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return { intent: "HELP", transaction: null, query_type: null, correction: null };
-  return JSON.parse(match[0]) as IntentResult;
+  if (!match) return { intent: "HELP", transaction: null, query_type: null, correction: null, account_creation: null };
+  try {
+    return JSON.parse(match[0]) as IntentResult;
+  } catch {
+    return { intent: "HELP", transaction: null, query_type: null, correction: null, account_creation: null };
+  }
 }
 
 // ─── Fetch user financial context ─────────────────────────────────────────────
@@ -263,7 +301,7 @@ ${ctx.budgetLine}`;
   return await gpt(system, question);
 }
 
-// ─── Resolve category ID by name ──────────────────────────────────────────────
+// ─── Resolve category ID ──────────────────────────────────────────────────────
 async function resolveCategoryId(userId: string, categoryName: string | null): Promise<string | null> {
   if (!categoryName) return null;
   const supabase = db();
@@ -293,7 +331,6 @@ async function insertTransaction(
   accountName: string,
   tx: TxPayload,
   currency: string,
-  rawPhone: string,
   sendReply: (text: string, opts?: { intent?: string; transactionId?: string }) => Promise<void>
 ) {
   const categoryId = await resolveCategoryId(userId, tx.category);
@@ -332,19 +369,35 @@ async function insertTransaction(
   );
 }
 
+// ─── Account type helpers ─────────────────────────────────────────────────────
+const ACCOUNT_TYPES: Record<string, string> = {
+  "1": "bank", "banco": "bank", "bank": "bank", "bancaria": "bank", "corriente": "bank",
+  "2": "cash", "efectivo": "cash", "cash": "cash", "billetera": "cash",
+  "3": "savings", "ahorro": "savings", "ahorros": "savings", "caja": "savings", "saving": "savings",
+  "4": "investment", "inversión": "investment", "inversion": "investment", "inversiones": "investment",
+};
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  bank: "Banco / Cuenta corriente",
+  cash: "Efectivo / Billetera",
+  savings: "Caja de ahorro",
+  investment: "Inversiones",
+};
+
+function resolveAccountType(input: string): string | null {
+  return ACCOUNT_TYPES[input.toLowerCase().trim()] ?? null;
+}
+
 // ─── Main webhook handler ─────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-
-    if (body.event !== "messages.upsert") {
-      return NextResponse.json({ received: true });
-    }
+    if (body.event !== "messages.upsert") return NextResponse.json({ received: true });
 
     const msgData = body.data;
     if (!msgData) return NextResponse.json({ received: true });
-
     if (msgData.key?.fromMe === true) return NextResponse.json({ received: true });
+
     const remoteJid: string = msgData.key?.remoteJid ?? "";
     if (remoteJid.endsWith("@g.us")) return NextResponse.json({ received: true });
 
@@ -369,27 +422,20 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     const userId = profile?.id ?? null;
-
     void logMsg({ userId, phone: rawPhone, direction: "inbound", messageType: inboundType, content: textContent });
 
     const reply = async (text: string, opts?: { intent?: string; transactionId?: string }) => {
       await sendWA(rawPhone, text);
-      void logMsg({
-        userId, phone: rawPhone, direction: "outbound", messageType: "text",
-        content: text, intent: opts?.intent ?? null, transactionId: opts?.transactionId ?? null,
-      });
+      void logMsg({ userId, phone: rawPhone, direction: "outbound", messageType: "text",
+        content: text, intent: opts?.intent ?? null, transactionId: opts?.transactionId ?? null });
     };
 
+    // Unknown user
     if (!profile) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
       await reply(
         `👋 ¡Hola! No encontré una cuenta de *FlowMind* asociada a este número (${phoneWithPlus}).\n\n` +
-        `*¿Aún no tenés cuenta?*\n` +
-        `Registrarte es fácil — al crear tu cuenta podés ingresar este número y empezar a usarme al instante:\n` +
-        `👉 ${appUrl}/register\n\n` +
-        `*¿Ya tenés cuenta?*\n` +
-        `Vinculá este número desde la app:\n` +
-        `Configuración → WhatsApp → ingresá *${phoneWithPlus}*\n\n` +
+        `*¿Aún no tenés cuenta?*\n👉 ${APP_URL}/register\n\n` +
+        `*¿Ya tenés cuenta?*\nVinculá este número desde:\nConfiguración → WhatsApp → ingresá *${phoneWithPlus}*\n\n` +
         `Después podés mandarme tus gastos, ingresos y fotos de tickets directamente por acá 💸`
       );
       return NextResponse.json({ received: true });
@@ -398,75 +444,139 @@ export async function POST(req: NextRequest) {
     const userName = profile.display_name ?? "Usuario";
     const currency = profile.currency_default ?? "UYU";
 
-    // ── Check for pending account selection ───────────────────────────────────
+    // ── Check for active pending state ────────────────────────────────────────
     const { data: pending } = await supabase
       .from("whatsapp_pending")
       .select("*")
       .eq("phone", rawPhone)
-      .eq("pending_type", "account_selection")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (pending && textContent) {
-      const choice = parseInt(textContent.trim(), 10);
-      const accounts: { id: string; name: string }[] = pending.payload.accounts ?? [];
+      // ── Pending: account selection for transaction ──────────────────────────
+      if (pending.pending_type === "account_selection") {
+        const choice = parseInt(textContent.trim(), 10);
+        const accounts: { id: string; name: string }[] = pending.payload.accounts ?? [];
 
-      if (!isNaN(choice) && choice >= 1 && choice <= accounts.length) {
-        const selectedAccount = accounts[choice - 1];
+        if (!isNaN(choice) && choice >= 1 && choice <= accounts.length) {
+          const selectedAccount = accounts[choice - 1];
+          await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+
+          if (pending.payload.correction_tx_id) {
+            await supabase.from("transactions").update({ account_id: selectedAccount.id }).eq("id", pending.payload.correction_tx_id);
+            await reply(`✅ Moví *${pending.payload.correction_label ?? "el movimiento"}* a la cuenta *${selectedAccount.name}*`);
+          } else {
+            const txData: TxPayload = pending.payload;
+            await insertTransaction(userId!, selectedAccount.id, selectedAccount.name, txData, currency, reply);
+            await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
+          }
+        } else {
+          const list = accounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+          await reply(`❓ Opción inválida. Respondé con el número:\n\n${list}`);
+        }
+        return NextResponse.json({ received: true });
+      }
+
+      // ── Pending: account creation — waiting for type ──────────────────────
+      if (pending.pending_type === "account_creation_type") {
+        const resolvedType = resolveAccountType(textContent.trim());
+        if (!resolvedType) {
+          await reply(
+            `❓ No reconocí ese tipo. Elegí una opción:\n\n` +
+            `1. Banco / Cuenta corriente\n2. Efectivo / Billetera\n3. Caja de ahorro\n4. Inversiones\n\n` +
+            `_Respondé con el número o el nombre._`
+          );
+          return NextResponse.json({ received: true });
+        }
         await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+        const { name, currency: accCurrency } = pending.payload;
+        const { data: newAcc, error } = await supabase.from("accounts").insert({
+          user_id: userId,
+          name: name ?? "Mi cuenta",
+          type: resolvedType,
+          currency: accCurrency ?? currency,
+          initial_balance: 0,
+          balance: 0,
+          is_primary: false,
+          icon: resolvedType === "bank" ? "bank" : resolvedType === "savings" ? "piggy_bank" : "wallet",
+          color: "#6366f1",
+        }).select().single();
 
-        // Correction: change account of existing transaction
-        if (pending.payload.correction_tx_id) {
-          await supabase.from("transactions").update({ account_id: selectedAccount.id }).eq("id", pending.payload.correction_tx_id);
-          await reply(`✅ Moví *${pending.payload.correction_label ?? "el movimiento"}* a la cuenta *${selectedAccount.name}*`);
+        if (error || !newAcc) {
+          await reply("❌ No pude crear la cuenta. Intentá desde la app: " + APP_URL + "/accounts");
+        } else {
+          await reply(
+            `✅ *Cuenta creada exitosamente*\n\n` +
+            `🏦 *${newAcc.name}*\n` +
+            `📋 Tipo: ${ACCOUNT_TYPE_LABELS[resolvedType] ?? resolvedType}\n` +
+            `💱 Moneda: ${newAcc.currency}\n\n` +
+            `Ya podés registrar movimientos en esta cuenta 🎉`
+          );
+        }
+        return NextResponse.json({ received: true });
+      }
+
+      // ── Pending: account creation — waiting for currency ─────────────────
+      if (pending.pending_type === "account_creation_currency") {
+        const inputCurrency = textContent.trim().toUpperCase();
+        const validCurrencies = ["UYU", "USD", "EUR", "ARS", "BRL"];
+        const resolvedCurrency = validCurrencies.find(c => inputCurrency.includes(c)) ?? null;
+
+        if (!resolvedCurrency) {
+          await reply(`❓ No reconocí la moneda. Ejemplos: UYU, USD, EUR, ARS\n\n¿En qué moneda es la cuenta?`);
           return NextResponse.json({ received: true });
         }
 
-        // New transaction: complete with selected account
-        const txData: TxPayload = pending.payload;
-        await insertTransaction(userId!, selectedAccount.id, selectedAccount.name, txData, currency, rawPhone, reply);
-        await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
-        return NextResponse.json({ received: true });
-      } else {
-        const list = accounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
-        await reply(`❓ Opción inválida. Respondé con el número de la cuenta:\n\n${list}`);
+        await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+        const { name, type } = pending.payload;
+
+        const { data: newAcc, error } = await supabase.from("accounts").insert({
+          user_id: userId,
+          name: name ?? "Mi cuenta",
+          type: type ?? "bank",
+          currency: resolvedCurrency,
+          initial_balance: 0,
+          balance: 0,
+          is_primary: false,
+          icon: type === "bank" ? "bank" : type === "savings" ? "piggy_bank" : "wallet",
+          color: "#6366f1",
+        }).select().single();
+
+        if (error || !newAcc) {
+          await reply("❌ No pude crear la cuenta. Intentá desde la app: " + APP_URL + "/accounts");
+        } else {
+          await reply(
+            `✅ *Cuenta creada exitosamente*\n\n` +
+            `🏦 *${newAcc.name}*\n` +
+            `📋 Tipo: ${ACCOUNT_TYPE_LABELS[type] ?? type}\n` +
+            `💱 Moneda: ${newAcc.currency}\n\n` +
+            `Ya podés registrar movimientos en esta cuenta 🎉`
+          );
+        }
         return NextResponse.json({ received: true });
       }
     }
 
     // ── Get all user accounts ─────────────────────────────────────────────────
     const { data: allAccounts } = await supabase
-      .from("accounts")
-      .select("id, name, currency")
+      .from("accounts").select("id, name, type, balance, currency")
       .eq("user_id", userId)
       .order("is_primary", { ascending: false })
       .order("created_at", { ascending: true });
 
-    // ── No accounts configured ────────────────────────────────────────────────
-    if (!allAccounts || allAccounts.length === 0) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
-      await reply(
-        `⚠️ *No tenés cuentas configuradas aún.*\n\n` +
-        `Para empezar a registrar tus movimientos, primero necesitás crear al menos una cuenta (ej: Efectivo, Banco, Billetera).\n\n` +
-        `Hacelo fácilmente desde la app:\n` +
-        `👉 ${appUrl}/accounts\n\n` +
-        `Una vez que tengas una cuenta creada, podés mandarme tus gastos e ingresos directamente por acá 💸`
-      );
-      return NextResponse.json({ received: true });
-    }
+    const accountsForClassifier: AccountInfo[] = (allAccounts ?? []).map(a => ({
+      id: a.id, name: a.name, type: a.type, balance: a.balance, currency: a.currency
+    }));
 
     let processedText: string | null = textContent;
     let source = "whatsapp";
 
-    // ── Audio: transcribe first ───────────────────────────────────────────────
+    // ── Audio: transcribe ─────────────────────────────────────────────────────
     if (hasAudio) {
       const audioB64 = await downloadMedia(remoteJid, msgData.key?.id ?? "");
-      if (!audioB64) {
-        await reply("❌ No pude procesar el audio. Intentá por texto.");
-        return NextResponse.json({ received: true });
-      }
+      if (!audioB64) { await reply("❌ No pude procesar el audio. Intentá por texto."); return NextResponse.json({ received: true }); }
       try {
         processedText = await whisper(audioB64);
         source = "whatsapp_voice";
@@ -481,95 +591,72 @@ export async function POST(req: NextRequest) {
     // ── Image: analyze receipt ────────────────────────────────────────────────
     if (hasImage) {
       const imgB64 = await downloadMedia(remoteJid, msgData.key?.id ?? "");
-      if (!imgB64) {
-        await reply("❌ No pude descargar la imagen. Intentá de nuevo.");
-        return NextResponse.json({ received: true });
-      }
+      if (!imgB64) { await reply("❌ No pude descargar la imagen."); return NextResponse.json({ received: true }); }
 
       const dataUri = imgB64.startsWith("data:") ? imgB64 : `data:image/jpeg;base64,${imgB64}`;
       const today = new Date().toISOString().split("T")[0];
-      const system = `Analizás tickets/facturas y extraés datos. Responde SOLO JSON:
+      const system = `Analizás tickets/facturas. Respondé SOLO JSON:
 {"type":"expense","amount":number,"currency":"${currency}","merchant":string|null,"date":"YYYY-MM-DD","category":string|null,"notes":string|null}
-Si no es un ticket, devolvé {"error":"not_a_receipt"}.
-Fecha hoy: ${today}. Moneda default: ${currency}.`;
+Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
       try {
         const raw = await gpt(system, [
           { type: "image_url", image_url: { url: dataUri, detail: "high" } },
           { type: "text", text: "Extraé los datos de este ticket/factura." },
         ] as object[]);
-
         const match = raw.match(/\{[\s\S]*\}/);
         if (!match) throw new Error("no json");
         const parsed = JSON.parse(match[0]);
-
         if (parsed.error === "not_a_receipt") {
           await reply("🤔 No pude leer un ticket en la imagen. ¿Podés describirlo por texto?");
           return NextResponse.json({ received: true });
         }
 
-        // Account selection for image transactions
-        if (allAccounts.length === 1) {
-          const acc = allAccounts[0];
-          const txPayload: TxPayload = {
-            type: parsed.type ?? "expense",
-            amount: parsed.amount,
-            currency: parsed.currency ?? currency,
-            merchant: parsed.merchant ?? null,
-            date: parsed.date ?? today,
-            category: parsed.category ?? null,
-            notes: parsed.notes ?? null,
-            source: "whatsapp_image",
-          };
-          await insertTransaction(userId!, acc.id, acc.name, txPayload, currency, rawPhone, reply);
+        const txPayload: TxPayload = {
+          type: parsed.type ?? "expense", amount: parsed.amount,
+          currency: parsed.currency ?? currency, merchant: parsed.merchant ?? null,
+          date: parsed.date ?? today, category: parsed.category ?? null,
+          notes: parsed.notes ?? null, source: "whatsapp_image",
+        };
+
+        if (!allAccounts || allAccounts.length === 0) {
+          await reply(`⚠️ Detecté un ticket pero no tenés cuentas configuradas.\nCreá una desde la app: 👉 ${APP_URL}/accounts`);
+        } else if (allAccounts.length === 1) {
+          await insertTransaction(userId!, allAccounts[0].id, allAccounts[0].name, txPayload, currency, reply);
         } else {
           const accountList = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
           const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(parsed.amount);
           await supabase.from("whatsapp_pending").insert({
-            phone: rawPhone,
-            user_id: userId,
-            pending_type: "account_selection",
-            payload: {
-              type: parsed.type ?? "expense",
-              amount: parsed.amount,
-              currency: parsed.currency ?? currency,
-              merchant: parsed.merchant ?? null,
-              date: parsed.date ?? today,
-              category: parsed.category ?? null,
-              notes: parsed.notes ?? null,
-              source: "whatsapp_image",
-              accounts: allAccounts.map((a) => ({ id: a.id, name: a.name })),
-            },
+            phone: rawPhone, user_id: userId, pending_type: "account_selection",
+            payload: { ...txPayload, accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
           await reply(
-            `🧾 *Ticket detectado:* ${parsed.merchant ?? "Sin comercio"} — ${parsed.currency ?? currency} ${amt}\n\n` +
-            `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número de la cuenta._`
+            `🧾 *Ticket:* ${parsed.merchant ?? "Sin comercio"} — ${parsed.currency ?? currency} ${amt}\n\n` +
+            `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número._`
           );
         }
-
         await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
         return NextResponse.json({ received: true });
       } catch (e) {
-        console.error("Image analysis error:", e);
+        console.error("Image error:", e);
         await reply("❌ No pude analizar el ticket. Describílo por texto.");
         return NextResponse.json({ received: true });
       }
     }
 
-    // ── Text / transcribed audio ──────────────────────────────────────────────
-    if (!processedText?.trim()) {
-      return NextResponse.json({ received: true });
-    }
+    if (!processedText?.trim()) return NextResponse.json({ received: true });
 
     const lowerText = processedText.toLowerCase().trim();
     if (lowerText === "ayuda" || lowerText === "help" || lowerText === "?") {
       await reply(
-        `👋 Hola *${userName}*! Podés hacer:\n\n` +
-        `💸 *Registrar gastos:*\n  "Gasté 500 en el super"\n  "Almuerzo 350 pesos"\n\n` +
-        `💰 *Registrar ingresos:*\n  "Cobré el sueldo 45000"\n  "Ingresé 5000 freelance"\n\n` +
-        `📸 *Ticket/Factura:*\n  Mandá una foto y lo proceso\n\n` +
-        `🎤 *Audio:*\n  Mandá una nota de voz\n\n` +
-        `📊 *Consultas:*\n  "¿Cuánto gasté este mes?"\n  "¿Cómo está mi balance?"\n  "Dame un análisis"`,
+        `👋 Hola *${userName}*! Soy tu asistente financiero. Podés hablarme de forma natural:\n\n` +
+        `💸 *Gastos:* "Gasté 500 en el super" / "Pagué el alquiler 15000"\n` +
+        `💰 *Ingresos:* "Cobré el sueldo 45000" / "Me entraron 8000"\n` +
+        `📸 *Tickets:* Mandá una foto de cualquier factura\n` +
+        `🎤 *Voz:* Mandá una nota de voz\n` +
+        `📊 *Consultas:* "¿Cómo estoy este mes?" / "¿En qué gasté más?"\n` +
+        `✏️ *Correcciones:* "Ese gasto ponelo en Santander" / "Borrá el último"\n` +
+        `🏦 *Cuentas:* "Quiero crear una cuenta en el Itaú"`,
         { intent: "HELP" }
       );
       return NextResponse.json({ received: true });
@@ -583,73 +670,120 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
       .order("created_at", { ascending: false })
       .limit(5);
 
-    const recentTxs: RecentTx[] = (recentForContext ?? []).map((t) => ({
-      id: t.id,
-      type: t.type,
-      amount: t.amount,
-      currency: t.currency,
-      merchant: t.merchant ?? null,
-      date: t.date?.split("T")[0] ?? "",
+    const recentTxs: RecentTx[] = (recentForContext ?? []).map(t => ({
+      id: t.id, type: t.type, amount: t.amount, currency: t.currency,
+      merchant: t.merchant ?? null, date: t.date?.split("T")[0] ?? "",
       account_name: (t.accounts as unknown as { name: string } | null)?.name ?? null,
     }));
 
-    const intent = await classifyMessage(processedText, currency, recentTxs);
+    const intent = await classifyMessage(processedText, currency, recentTxs, accountsForClassifier);
     await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
+
+    // ── ACCOUNT_CREATION ──────────────────────────────────────────────────────
+    if (intent.intent === "ACCOUNT_CREATION") {
+      const ac = intent.account_creation ?? {};
+      const accName: string | null = ac.name ?? null;
+      let accType: string | null = ac.type ?? null;
+      const accCurrency: string | null = ac.currency ?? null;
+
+      if (!accType) {
+        // Ask for type
+        await supabase.from("whatsapp_pending").insert({
+          phone: rawPhone, user_id: userId, pending_type: "account_creation_type",
+          payload: { name: accName, currency: accCurrency ?? currency },
+        });
+        const nameStr = accName ? ` para *${accName}*` : "";
+        await reply(
+          `🏦 Voy a crear tu cuenta${nameStr}. ¿Qué tipo de cuenta es?\n\n` +
+          `1. Banco / Cuenta corriente\n2. Efectivo / Billetera\n3. Caja de ahorro\n4. Inversiones\n\n` +
+          `_Respondé con el número o el nombre._`
+        );
+        return NextResponse.json({ received: true });
+      }
+
+      // Check if needs currency
+      const finalCurrency = accCurrency ?? currency;
+
+      const { data: newAcc, error } = await supabase.from("accounts").insert({
+        user_id: userId,
+        name: accName ?? "Mi cuenta",
+        type: accType,
+        currency: finalCurrency,
+        initial_balance: 0,
+        balance: 0,
+        is_primary: false,
+        icon: accType === "bank" ? "bank" : accType === "savings" ? "piggy_bank" : "wallet",
+        color: "#6366f1",
+      }).select().single();
+
+      if (error || !newAcc) {
+        await reply(`❌ No pude crear la cuenta. Intentá desde la app: 👉 ${APP_URL}/accounts`);
+      } else {
+        await reply(
+          `✅ *Cuenta creada exitosamente*\n\n` +
+          `🏦 *${newAcc.name}*\n` +
+          `📋 Tipo: ${ACCOUNT_TYPE_LABELS[accType] ?? accType}\n` +
+          `💱 Moneda: ${newAcc.currency}\n\n` +
+          `Ya podés registrar movimientos en esta cuenta.\n` +
+          `También podés ajustar el saldo inicial desde la app: 👉 ${APP_URL}/accounts 🎉`
+        );
+      }
+      return NextResponse.json({ received: true });
+    }
 
     // ── TRANSACTION ───────────────────────────────────────────────────────────
     if (intent.intent === "TRANSACTION" && intent.transaction) {
       const tx = intent.transaction;
 
-      if (allAccounts.length === 1) {
-        // Only one account — use it directly
-        const acc = allAccounts[0];
-        await insertTransaction(userId!, acc.id, acc.name, { ...tx, source }, currency, rawPhone, reply);
-      } else {
-        // Multiple accounts — ask user to choose
-        const accountList = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
-        const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
-        const typeLabel = tx.type === "income" ? "Ingreso" : "Gasto";
-        const emoji = tx.type === "income" ? "💰" : "💸";
-
-        await supabase.from("whatsapp_pending").insert({
-          phone: rawPhone,
-          user_id: userId,
-          pending_type: "account_selection",
-          payload: {
-            ...tx,
-            source,
-            accounts: allAccounts.map((a) => ({ id: a.id, name: a.name })),
-          },
-        });
-
+      if (!allAccounts || allAccounts.length === 0) {
         await reply(
-          `${emoji} *${typeLabel} detectado:* ${tx.merchant ?? tx.category ?? "Sin descripción"} — ${tx.currency ?? currency} ${amt}\n\n` +
-          `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número de la cuenta._`
+          `⚠️ *No tenés cuentas configuradas aún.*\n\n` +
+          `Podés crear una ahora mismo diciéndome:\n_"Quiero crear una cuenta en [banco/efectivo]"_\n\n` +
+          `O desde la app: 👉 ${APP_URL}/accounts`
         );
+        return NextResponse.json({ received: true });
       }
 
+      if (allAccounts.length === 1) {
+        await insertTransaction(userId!, allAccounts[0].id, allAccounts[0].name, { ...tx, source }, currency, reply);
+      } else {
+        const accountList = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+        const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
+        const emoji = tx.type === "income" ? "💰" : "💸";
+        await supabase.from("whatsapp_pending").insert({
+          phone: rawPhone, user_id: userId, pending_type: "account_selection",
+          payload: { ...tx, source, accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
+        });
+        await reply(
+          `${emoji} *${tx.type === "income" ? "Ingreso" : "Gasto"} detectado:* ` +
+          `${tx.merchant ?? tx.category ?? "movimiento"} — ${tx.currency ?? currency} ${amt}\n\n` +
+          `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número._`
+        );
+      }
       return NextResponse.json({ received: true });
     }
 
-    // ── CORRECTION ───────────────────────────────────────────────────────────
+    // ── CORRECTION ────────────────────────────────────────────────────────────
     if (intent.intent === "CORRECTION" && intent.correction) {
       const corr = intent.correction;
 
-      // Get last transaction
-      const { data: lastTx } = await supabase
+      // Get last transaction (or search by amount if specified)
+      let lastTxQuery = supabase
         .from("transactions")
         .select("id, type, amount, currency, merchant, category_id, account_id, accounts(name)")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      const { data: lastTx } = await lastTxQuery.maybeSingle();
 
       if (!lastTx) {
-        await reply("🤔 No encontré ningún movimiento reciente para corregir.");
+        await reply("🤔 No encontré ningún movimiento reciente para corregir. Registrá algo primero.");
         return NextResponse.json({ received: true });
       }
 
-      const txLabel = lastTx.merchant ?? `${lastTx.type === "income" ? "ingreso" : "gasto"} de ${lastTx.currency} ${lastTx.amount}`;
+      const txLabel = lastTx.merchant ??
+        `${lastTx.type === "income" ? "ingreso" : "gasto"} de ${lastTx.currency} ${lastTx.amount}`;
 
       if (corr.action === "delete") {
         await supabase.from("transactions").delete().eq("id", lastTx.id);
@@ -664,48 +798,55 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
         return NextResponse.json({ received: true });
       }
 
-      if (corr.action === "change_account" && corr.account_name) {
-        // Find account by name (fuzzy)
+      if (corr.action === "change_account") {
+        if (!corr.account_name) {
+          // No account name specified — show list
+          if (!allAccounts || allAccounts.length === 0) {
+            await reply(`⚠️ No tenés otras cuentas. Creá una diciéndome "quiero crear una cuenta".`);
+            return NextResponse.json({ received: true });
+          }
+          const list = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+          await supabase.from("whatsapp_pending").insert({
+            phone: rawPhone, user_id: userId, pending_type: "account_selection",
+            payload: { correction_tx_id: lastTx.id, correction_label: txLabel,
+              accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
+          });
+          await reply(`¿A qué cuenta querés mover *${txLabel}*?\n\n${list}\n\n_Respondé con el número._`);
+          return NextResponse.json({ received: true });
+        }
+
+        // Search account by name
         const { data: matchedAccounts } = await supabase
-          .from("accounts")
-          .select("id, name")
+          .from("accounts").select("id, name")
           .eq("user_id", userId)
           .ilike("name", `%${corr.account_name}%`);
 
         if (!matchedAccounts || matchedAccounts.length === 0) {
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
           await reply(
             `⚠️ No encontré ninguna cuenta que se llame *${corr.account_name}*.\n\n` +
-            `Creala desde la app y después volvé a avisarme:\n` +
-            `👉 ${appUrl}/accounts\n\n` +
-            `_Una vez creada podés decirme "ese ingreso ponelo en ${corr.account_name}" y lo muevo._`
+            `¿Querés que te ayude a crearla? Decime:\n` +
+            `_"Quiero crear una cuenta ${corr.account_name}"_\n\n` +
+            `O desde la app: 👉 ${APP_URL}/accounts`
           );
           return NextResponse.json({ received: true });
         }
 
         if (matchedAccounts.length === 1) {
-          const acc = matchedAccounts[0];
-          await supabase.from("transactions").update({ account_id: acc.id }).eq("id", lastTx.id);
-          await reply(`✅ Moví *${txLabel}* a la cuenta *${acc.name}*`);
+          await supabase.from("transactions").update({ account_id: matchedAccounts[0].id }).eq("id", lastTx.id);
+          await reply(`✅ Moví *${txLabel}* a la cuenta *${matchedAccounts[0].name}*`);
         } else {
-          // Multiple matches — ask to confirm
           const list = matchedAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
           await supabase.from("whatsapp_pending").insert({
-            phone: rawPhone,
-            user_id: userId,
-            pending_type: "account_selection",
-            payload: {
-              correction_tx_id: lastTx.id,
-              correction_label: txLabel,
-              accounts: matchedAccounts.map((a) => ({ id: a.id, name: a.name })),
-            },
+            phone: rawPhone, user_id: userId, pending_type: "account_selection",
+            payload: { correction_tx_id: lastTx.id, correction_label: txLabel,
+              accounts: matchedAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
           await reply(`¿A cuál de estas cuentas querés mover *${txLabel}*?\n\n${list}\n\n_Respondé con el número._`);
         }
         return NextResponse.json({ received: true });
       }
 
-      await reply("🤔 No entendí qué querés corregir. Podés decirme:\n• \"Borrá el último movimiento\"\n• \"Ese gasto ponelo en [cuenta]\"\n• \"El monto era [número]\"");
+      await reply("🤔 ¿Qué querés corregir del último movimiento?\n• \"Ponelo en [cuenta]\"\n• \"El monto era [número]\"\n• \"Borrá el último\"");
       return NextResponse.json({ received: true });
     }
 
@@ -718,11 +859,16 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
       return NextResponse.json({ received: true });
     }
 
-    // ── HELP/default ──────────────────────────────────────────────────────────
-    await reply(
-      `🤔 No entendí bien. Podés decirme:\n• Un gasto: _"Gasté 500 en el super"_\n• Un ingreso: _"Cobré 25000"_\n• Una consulta: _"¿Cuánto gasté este mes?"_\n• O enviá una foto de un ticket\n\nEscribí *ayuda* para más info.`,
-      { intent: "HELP" }
+    // ── HELP / default ────────────────────────────────────────────────────────
+    // Let GPT generate a helpful response instead of a static message
+    const helpAnswer = await gpt(
+      `Sos FlowMind AI, asistente financiero personal de ${userName} en WhatsApp.
+Respondé de forma amigable y corta (máx 3 líneas) en español. No inventes datos financieros.
+Si el usuario pregunta algo que podés ayudar (cuentas, gastos, ingresos, presupuesto) explicá cómo.
+Si es algo fuera de tu alcance, decilo amablemente y recordá lo que sí podés hacer.`,
+      processedText
     );
+    await reply(helpAnswer, { intent: "HELP" });
 
     return NextResponse.json({ received: true });
   } catch (err) {
