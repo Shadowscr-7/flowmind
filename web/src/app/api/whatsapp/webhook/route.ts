@@ -252,11 +252,11 @@ HELP — saludos, preguntas de uso, contenido no relacionado.
 
   const raw = await gpt(system, text, "gpt-4o");
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return { intent: "HELP", transaction: null, query_type: null, correction: null, account_creation: null };
+  if (!match) return { intent: "HELP", transaction: null, transfer: null, query_type: null, correction: null, account_creation: null };
   try {
     return JSON.parse(match[0]) as IntentResult;
   } catch {
-    return { intent: "HELP", transaction: null, query_type: null, correction: null, account_creation: null };
+    return { intent: "HELP", transaction: null, transfer: null, query_type: null, correction: null, account_creation: null };
   }
 }
 
