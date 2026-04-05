@@ -338,7 +338,7 @@ export default function ConversationsPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   {selectedConv?.user_id && (
-                    <User className="h-4 w-4 text-emerald-500" title="Usuario registrado" />
+                    <User className="h-4 w-4 text-emerald-500" />
                   )}
                   <span className="text-xs text-slate-400">{messages.length} msgs</span>
                 </div>
