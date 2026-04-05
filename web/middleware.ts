@@ -37,10 +37,13 @@ export async function middleware(request: NextRequest) {
 
   const isAuthRoute =
     pathname.startsWith("/login") || pathname.startsWith("/register");
-  const isDashboardRoute =
-    !isAuthRoute && !pathname.startsWith("/_next");
 
-  if (!user && isDashboardRoute) {
+  // Public routes — no auth required
+  const isPublicRoute = pathname === "/" || isAuthRoute || pathname.startsWith("/api/paypal");
+
+  const isProtectedRoute = !isPublicRoute && !pathname.startsWith("/_next");
+
+  if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -48,7 +51,7 @@ export async function middleware(request: NextRequest) {
 
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
