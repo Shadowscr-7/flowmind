@@ -124,12 +124,34 @@ interface IntentResult {
   } | null;
 }
 
-async function classifyMessage(text: string, currency: string): Promise<IntentResult> {
+interface RecentTx {
+  id: string;
+  type: string;
+  amount: number;
+  currency: string;
+  merchant: string | null;
+  date: string;
+  account_name: string | null;
+}
+
+async function classifyMessage(text: string, currency: string, recentTxs: RecentTx[] = []): Promise<IntentResult> {
   const today = new Date().toISOString().split("T")[0];
+
+  const recentContext = recentTxs.length > 0
+    ? `\nÚLTIMOS MOVIMIENTOS REGISTRADOS (del más reciente al más antiguo):\n` +
+      recentTxs.map((t, i) =>
+        `${i + 1}. ${t.type === "income" ? "Ingreso" : "Gasto"} de ${t.currency} ${t.amount}` +
+        `${t.merchant ? ` en ${t.merchant}` : ""}` +
+        ` (cuenta: ${t.account_name ?? "desconocida"}, fecha: ${t.date})`
+      ).join("\n")
+    : "";
+
   const system = `Eres FlowMind AI procesando mensajes de WhatsApp de finanzas personales.
 Fecha hoy: ${today}. Moneda por defecto: ${currency}.
+${recentContext}
 
-Analizá el mensaje y respondé SOLO con JSON:
+Tu tarea es entender el INTENTO real del usuario aunque use lenguaje coloquial, informal o indirecto en español.
+Respondé SOLO con JSON válido, sin texto adicional:
 {
   "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION",
   "transaction": {
@@ -149,16 +171,28 @@ Analizá el mensaje y respondé SOLO con JSON:
   } | null
 }
 
-TRANSACTION: registra un movimiento ("gasté", "pagué", "cobré", "ingresé", "compré")
-QUERY: pregunta sobre finanzas ("cuánto gasté", "cómo estoy", "balance", "resumen", "analiza")
-CORRECTION: corrige el último movimiento registrado. Ejemplos:
-  - "eso no era del efectivo, era del banco" → change_account, account_name: "banco"
-  - "ese gasto ponelo en la cuenta Santander" → change_account, account_name: "Santander"
-  - "borrá el último movimiento" → delete
-  - "el monto era 500 no 300" → change_amount, new_amount: 500
-HELP: saludo, ayuda, o contenido no financiero`;
+TRANSACTION: el usuario registra un movimiento de dinero.
+  Ejemplos: "gasté 500 en el super", "pagué el alquiler", "cobré el sueldo", "me depositaron 45000", "almorcé y pagué 350"
 
-  const raw = await gpt(system, text);
+QUERY: el usuario pregunta sobre sus finanzas.
+  Ejemplos: "cuánto gasté?", "cómo estoy?", "dame un resumen", "en qué gasté más?", "cuál es mi balance?"
+
+CORRECTION: el usuario quiere corregir, mover, eliminar o modificar un movimiento ya registrado.
+  Puede referirse al último movimiento de forma implícita o explícita.
+  Ejemplos:
+  - "eso no era del efectivo, es de Santander" → change_account, account_name: "Santander"
+  - "el dinero que registré en efectivo es en realidad de mi cuenta Santander" → change_account, account_name: "Santander"
+  - "ese ingreso ponelo en el banco" → change_account, account_name: "banco"
+  - "me equivoqué de cuenta, era la del Itaú" → change_account, account_name: "Itaú"
+  - "borrá eso" / "eliminá el último" / "no era correcto" → delete
+  - "el monto estaba mal, eran 800" → change_amount, new_amount: 800
+  - "en realidad fueron 1200 no 1000" → change_amount, new_amount: 1200
+
+HELP: saludos, ayuda general, preguntas sobre cómo funciona, contenido no financiero.
+
+Ante la duda entre CORRECTION y HELP: si el usuario menciona cuentas, montos anteriores o hace referencia a algo ya registrado, elegí CORRECTION.`;
+
+  const raw = await gpt(system, text, "gpt-4o");
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return { intent: "HELP", transaction: null, query_type: null, correction: null };
   return JSON.parse(match[0]) as IntentResult;
@@ -541,7 +575,25 @@ Fecha hoy: ${today}. Moneda default: ${currency}.`;
       return NextResponse.json({ received: true });
     }
 
-    const intent = await classifyMessage(processedText, currency);
+    // Fetch recent transactions for context
+    const { data: recentForContext } = await supabase
+      .from("transactions")
+      .select("id, type, amount, currency, merchant, date, accounts(name)")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const recentTxs: RecentTx[] = (recentForContext ?? []).map((t) => ({
+      id: t.id,
+      type: t.type,
+      amount: t.amount,
+      currency: t.currency,
+      merchant: t.merchant ?? null,
+      date: t.date?.split("T")[0] ?? "",
+      account_name: (t.accounts as unknown as { name: string } | null)?.name ?? null,
+    }));
+
+    const intent = await classifyMessage(processedText, currency, recentTxs);
     await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
 
     // ── TRANSACTION ───────────────────────────────────────────────────────────
