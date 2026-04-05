@@ -261,11 +261,17 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (!profile) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
       await sendWA(
         rawPhone,
-        `👋 Hola! Para usar FlowMind por WhatsApp registrá tu número en la app:\n\n` +
-          `1. Ingresá a la app web\n2. Andá a *Configuración*\n3. En la sección WhatsApp ingresá el número: *${phoneWithPlus}*\n\n` +
-          `Después podés mandarme tus gastos e ingresos directamente por acá 💸`
+        `👋 ¡Hola! No encontré una cuenta de *FlowMind* asociada a este número (${phoneWithPlus}).\n\n` +
+          `*¿Aún no tenés cuenta?*\n` +
+          `Registrarte es fácil — al crear tu cuenta podés ingresar este número y empezar a usarme al instante:\n` +
+          `👉 ${appUrl}/register\n\n` +
+          `*¿Ya tenés cuenta?*\n` +
+          `Vinculá este número desde la app:\n` +
+          `Configuración → WhatsApp → ingresá *${phoneWithPlus}*\n\n` +
+          `Después podés mandarme tus gastos, ingresos y fotos de tickets directamente por acá 💸`
       );
       return NextResponse.json({ received: true });
     }
