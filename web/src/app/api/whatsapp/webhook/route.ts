@@ -124,7 +124,7 @@ interface AccountInfo {
 }
 
 interface IntentResult {
-  intent: "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION";
+  intent: "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION" | "TRANSFER";
   transaction: {
     type: "expense" | "income";
     amount: number;
@@ -132,6 +132,14 @@ interface IntentResult {
     merchant: string | null;
     date: string;
     category: string | null;
+    notes: string | null;
+  } | null;
+  transfer: {
+    amount: number;
+    currency: string;
+    from_account: string | null;
+    to_account: string | null;
+    date: string;
     notes: string | null;
   } | null;
   query_type: "balance" | "monthly_summary" | "category_breakdown" | "recent" | "general" | null;
@@ -178,8 +186,9 @@ Analizá el INTENTO REAL del usuario aunque use lenguaje coloquial, indirecto o 
 Respondé ÚNICAMENTE con JSON válido (sin texto extra, sin markdown):
 
 {
-  "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION",
+  "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION" | "TRANSFER",
   "transaction": { "type": "expense"|"income", "amount": number, "currency": string, "merchant": string|null, "date": "YYYY-MM-DD", "category": string|null, "notes": string|null } | null,
+  "transfer": { "amount": number, "currency": string, "from_account": string|null, "to_account": string|null, "date": "YYYY-MM-DD", "notes": string|null } | null,
   "query_type": "balance"|"monthly_summary"|"category_breakdown"|"recent"|"general" | null,
   "correction": { "action": "change_account"|"delete"|"change_amount"|"rename_account", "account_name": string|null, "new_amount": number|null, "new_name": string|null } | null,
   "account_creation": { "name": string|null, "type": "bank"|"cash"|"savings"|"investment"|null, "currency": string|null } | null
@@ -187,46 +196,59 @@ Respondé ÚNICAMENTE con JSON válido (sin texto extra, sin markdown):
 
 ── INTENTS ──────────────────────────────────────────────────────────────────
 
-TRANSACTION — el usuario reporta un movimiento de dinero.
-  "gasté 500 en el super" → expense 500
-  "pagué el alquiler 15000" → expense 15000
-  "cobré el sueldo 45000" → income 45000
-  "me transfirieron 8000" → income 8000
-  "almorcé y pagué 350 con tarjeta" → expense 350
+TRANSACTION — movimiento que sale o entra del patrimonio total del usuario.
+  expense: dinero que sale hacia afuera (comercios, personas, servicios)
+    "gasté 500 en el super" → expense 500
+    "pagué el alquiler 15000" → expense 15000
+    "le mandé 3000 a Juan" → expense 3000 (pago a otra persona = sale del patrimonio)
+    "le pagué a María 800" → expense 800
+    "almorcé y pagué 350" → expense 350
+  income: dinero que entra desde afuera
+    "cobré el sueldo 45000" → income 45000
+    "me pagaron 8000 por un trabajo" → income 8000
 
-QUERY — el usuario pregunta sobre sus finanzas o pide análisis.
-  "cuánto gasté este mes?" → monthly_summary
+TRANSFER — dinero que se mueve entre cuentas PROPIAS del usuario (el total no cambia).
+  from_account: cuenta de origen (nombre o null si no especificado)
+  to_account: cuenta destino (nombre o null si no especificado)
+  Ejemplos:
+    "pasé 5000 del banco al efectivo" → from: "banco", to: "efectivo"
+    "moví 10000 de ahorro a corriente" → from: "ahorro", to: "corriente"
+    "saqué 10000 del cajero" → retiro = from: banco/cuenta bancaria, to: efectivo
+    "retiré plata del BROU" → from: "BROU", to: efectivo (null si no especifica destino)
+    "transferí 20000 a mi cuenta Santander" → from: null (no especifica origen), to: "Santander"
+    "moví plata entre cuentas" → from: null, to: null (preguntar ambos)
+  IMPORTANTE: Si el usuario dice "transferí a [nombre de persona]" → es TRANSACTION expense, NO transfer.
+  IMPORTANTE: Un retiro del cajero siempre es TRANSFER (de cuenta bancaria a efectivo).
+
+QUERY — consultas sobre finanzas.
+  "cuánto gasté?" → monthly_summary
   "cómo estoy?" → general
   "cuál es mi saldo?" → balance
   "en qué gasté más?" → category_breakdown
   "mostrá los últimos movimientos" → recent
 
-CORRECTION — el usuario quiere corregir o modificar algo ya registrado (movimiento O cuenta).
-  Puede ser implícito o referirse a lo último registrado.
+CORRECTION — corregir algo ya registrado.
   "eso no era del efectivo, es de Santander" → change_account "Santander"
-  "ese ingreso ponelo en la cuenta del Itaú" → change_account "Itaú"
+  "ese ingreso ponelo en el Itaú" → change_account "Itaú"
   "me equivoqué de cuenta" → change_account (account_name: null)
-  "borrá el último" / "eliminá eso" → delete
+  "borrá el último" → delete
   "el monto era 800 no 500" → change_amount 800
-  "no es Santandiar, es Santander" → rename_account, new_name: "Santander" (renombrar la última cuenta creada)
-  "el nombre está mal, es BROU no BORU" → rename_account, new_name: "BROU"
-  "cambiá el nombre de la cuenta a Itaú" → rename_account, new_name: "Itaú"
+  "no es Santandiar, es Santander" → rename_account, new_name: "Santander"
 
-ACCOUNT_CREATION — el usuario quiere crear o agregar una cuenta/billetera.
+ACCOUNT_CREATION — crear o agregar una cuenta propia.
   "quiero crear una cuenta en Santander" → name: "Santander", type: "bank"
-  "ayudame a agregar mi cuenta del banco BROU" → name: "BROU", type: "bank"
-  "necesito agregar una billetera virtual" → name: null, type: null (preguntar)
+  "agregar mi cuenta BROU" → name: "BROU", type: "bank"
   "quiero agregar mi efectivo" → name: "Efectivo", type: "cash"
-  "tengo una caja de ahorro en el Itaú" → name: "Itaú", type: "savings"
-  "crear cuenta" → name: null, type: null
+  "tengo una caja de ahorro en Itaú" → name: "Itaú", type: "savings"
 
-HELP — saludos, preguntas de uso, contenido no financiero.
+HELP — saludos, preguntas de uso, contenido no relacionado.
 
 ── REGLAS DE DESEMPATE ──────────────────────────────────────────────────────
-- Si el usuario menciona el nombre de un banco o cuenta + "es en realidad" / "no era" / "ponelo en" → CORRECTION
-- Si el usuario dice "crear", "agregar", "añadir" + cuenta/banco/billetera → ACCOUNT_CREATION
-- Si hay duda entre CORRECTION y HELP y hay mención de cuentas o montos → CORRECTION
-- Si hay duda entre ACCOUNT_CREATION y HELP → ACCOUNT_CREATION`;
+- "transferí a [persona]" → TRANSACTION expense (no TRANSFER)
+- "saqué del cajero" / "retiré del banco" → TRANSFER
+- "pasé/moví plata entre cuentas" → TRANSFER
+- Si menciona dos cuentas propias → TRANSFER
+- Si menciona un comercio o persona externa → TRANSACTION`;
 
   const raw = await gpt(system, text, "gpt-4o");
   const match = raw.match(/\{[\s\S]*\}/);
@@ -405,6 +427,74 @@ Respondé SOLO JSON:
   try { return JSON.parse(match[0]); } catch { return { confirmed: false, cancelled: false }; }
 }
 
+// ─── Insert transfer between accounts ────────────────────────────────────────
+async function insertTransfer(
+  userId: string,
+  fromAccountId: string,
+  fromAccountName: string,
+  toAccountId: string,
+  toAccountName: string,
+  amount: number,
+  currency: string,
+  date: string,
+  notes: string | null,
+  sendReply: (text: string, opts?: { intent?: string }) => Promise<void>
+) {
+  const { error } = await db().from("transactions").insert({
+    user_id: userId,
+    account_id: fromAccountId,
+    transfer_to_account_id: toAccountId,
+    type: "transfer",
+    amount,
+    currency,
+    date,
+    notes: notes ?? null,
+    source: "whatsapp",
+    confidence: 0.95,
+    is_confirmed: true,
+  });
+
+  if (error) {
+    await sendReply("❌ Error al registrar la transferencia. Intentá de nuevo.");
+    return;
+  }
+
+  const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(amount);
+  await sendReply(
+    `🔄 *Transferencia registrada*\n\n` +
+    `📤 De: *${fromAccountName}*\n` +
+    `📥 A: *${toAccountName}*\n` +
+    `💵 ${currency} ${fmt}\n` +
+    `📅 ${date}\n` +
+    (notes ? `📝 ${notes}\n` : "") +
+    `\n✅ Ambas cuentas actualizadas`,
+    { intent: "TRANSFER" }
+  );
+}
+
+// ─── Resolve account from name (fuzzy match) ──────────────────────────────────
+function matchAccount(name: string | null, accounts: AccountInfo[]): AccountInfo | null {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  // Exact match first
+  const exact = accounts.find(a => a.name.toLowerCase() === lower);
+  if (exact) return exact;
+  // Partial match
+  const partial = accounts.find(a => a.name.toLowerCase().includes(lower) || lower.includes(a.name.toLowerCase()));
+  if (partial) return partial;
+  // Type-based match (e.g. "efectivo" → type cash)
+  if (["efectivo", "cash", "billetera"].some(k => lower.includes(k))) {
+    return accounts.find(a => a.type === "cash") ?? null;
+  }
+  if (["banco", "bank", "corriente", "cajero"].some(k => lower.includes(k))) {
+    return accounts.find(a => a.type === "bank") ?? null;
+  }
+  if (["ahorro", "saving"].some(k => lower.includes(k))) {
+    return accounts.find(a => a.type === "savings") ?? null;
+  }
+  return null;
+}
+
 // ─── Account type helpers ─────────────────────────────────────────────────────
 const ACCOUNT_TYPES: Record<string, string> = {
   "1": "bank", "banco": "bank", "bank": "bank", "bancaria": "bank", "corriente": "bank",
@@ -511,6 +601,49 @@ export async function POST(req: NextRequest) {
         } else {
           const list = accounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
           await reply(`❓ Opción inválida. Respondé con el número:\n\n${list}`);
+        }
+        return NextResponse.json({ received: true });
+      }
+
+      // ── Pending: transfer — waiting for from account ─────────────────────
+      if (pending.pending_type === "transfer_select_from") {
+        const choice = parseInt(textContent.trim(), 10);
+        const accounts: AccountInfo[] = pending.payload.accounts ?? [];
+        if (!isNaN(choice) && choice >= 1 && choice <= accounts.length) {
+          const selected = accounts[choice - 1];
+          const { amount, currency: txCurrency, to_account_id, to_account_name, date, notes } = pending.payload;
+          await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+          if (to_account_id) {
+            await insertTransfer(userId!, selected.id, selected.name, to_account_id, to_account_name, amount, txCurrency, date, notes, reply);
+          } else {
+            // Now ask for destination
+            const remaining = accounts.filter(a => a.id !== selected.id);
+            const list = remaining.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+            await supabase.from("whatsapp_pending").insert({
+              phone: rawPhone, user_id: userId, pending_type: "transfer_select_to",
+              payload: { amount, currency: txCurrency, from_account_id: selected.id, from_account_name: selected.name, date, notes, accounts: remaining },
+            });
+            await reply(`¿A qué cuenta va el dinero?\n\n${list}\n\n_Respondé con el número._`);
+          }
+        } else {
+          const list = (pending.payload.accounts as AccountInfo[]).map((a: AccountInfo, i: number) => `${i + 1}. ${a.name}`).join("\n");
+          await reply(`❓ Opción inválida:\n\n${list}`);
+        }
+        return NextResponse.json({ received: true });
+      }
+
+      // ── Pending: transfer — waiting for to account ────────────────────────
+      if (pending.pending_type === "transfer_select_to") {
+        const choice = parseInt(textContent.trim(), 10);
+        const accounts: AccountInfo[] = pending.payload.accounts ?? [];
+        if (!isNaN(choice) && choice >= 1 && choice <= accounts.length) {
+          const selected = accounts[choice - 1];
+          const { amount, currency: txCurrency, from_account_id, from_account_name, date, notes } = pending.payload;
+          await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+          await insertTransfer(userId!, from_account_id, from_account_name, selected.id, selected.name, amount, txCurrency, date, notes, reply);
+        } else {
+          const list = (pending.payload.accounts as AccountInfo[]).map((a: AccountInfo, i: number) => `${i + 1}. ${a.name}`).join("\n");
+          await reply(`❓ Opción inválida:\n\n${list}`);
         }
         return NextResponse.json({ received: true });
       }
@@ -827,6 +960,75 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
           `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número._`
         );
       }
+      return NextResponse.json({ received: true });
+    }
+
+    // ── TRANSFER ──────────────────────────────────────────────────────────────
+    if (intent.intent === "TRANSFER" && intent.transfer) {
+      const tr = intent.transfer;
+      const today = new Date().toISOString().split("T")[0];
+      const txDate = tr.date ?? today;
+      const txCurrency = tr.currency ?? currency;
+      const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tr.amount);
+
+      if (!allAccounts || allAccounts.length < 2) {
+        await reply(
+          `⚠️ Necesitás al menos *2 cuentas* para registrar una transferencia.\n\n` +
+          `Creá otra cuenta diciéndome: _"Quiero crear una cuenta en [banco/efectivo]"_\n` +
+          `O desde la app: 👉 ${APP_URL}/accounts`
+        );
+        return NextResponse.json({ received: true });
+      }
+
+      const fromAcc = matchAccount(tr.from_account, allAccounts);
+      const toAcc = matchAccount(tr.to_account, allAccounts);
+
+      // Both resolved
+      if (fromAcc && toAcc && fromAcc.id !== toAcc.id) {
+        await insertTransfer(userId!, fromAcc.id, fromAcc.name, toAcc.id, toAcc.name, tr.amount, txCurrency, txDate, tr.notes, reply);
+        return NextResponse.json({ received: true });
+      }
+
+      // Need to ask for from
+      if (!fromAcc) {
+        const eligible = toAcc ? allAccounts.filter(a => a.id !== toAcc.id) : allAccounts;
+        const list = eligible.map((a, i) => `${i + 1}. ${a.name} (${txCurrency} ${a.balance})`).join("\n");
+        await supabase.from("whatsapp_pending").insert({
+          phone: rawPhone, user_id: userId, pending_type: "transfer_select_from",
+          payload: {
+            amount: tr.amount, currency: txCurrency, date: txDate, notes: tr.notes,
+            to_account_id: toAcc?.id ?? null, to_account_name: toAcc?.name ?? null,
+            accounts: eligible,
+          },
+        });
+        await reply(
+          `🔄 Transferencia de *${txCurrency} ${fmt}*${toAcc ? ` → *${toAcc.name}*` : ""}\n\n` +
+          `¿De qué cuenta sale el dinero?\n\n${list}\n\n_Respondé con el número._`
+        );
+        return NextResponse.json({ received: true });
+      }
+
+      // Need to ask for to
+      if (!toAcc) {
+        const eligible = allAccounts.filter(a => a.id !== fromAcc.id);
+        const list = eligible.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
+        await supabase.from("whatsapp_pending").insert({
+          phone: rawPhone, user_id: userId, pending_type: "transfer_select_to",
+          payload: {
+            amount: tr.amount, currency: txCurrency, date: txDate, notes: tr.notes,
+            from_account_id: fromAcc.id, from_account_name: fromAcc.name,
+            accounts: eligible,
+          },
+        });
+        await reply(
+          `🔄 Transferencia de *${fromAcc.name}* — *${txCurrency} ${fmt}*\n\n` +
+          `¿A qué cuenta va el dinero?\n\n${list}\n\n_Respondé con el número._`
+        );
+        return NextResponse.json({ received: true });
+      }
+
+      // Same account error
+      await reply(`⚠️ La cuenta de origen y destino no pueden ser la misma (*${fromAcc.name}*).`);
       return NextResponse.json({ received: true });
     }
 
