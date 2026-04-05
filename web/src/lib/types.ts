@@ -23,6 +23,7 @@ export interface Account {
   type: AccountType;
   balance: number;
   currency: string;
+  is_active: boolean;
 }
 
 export interface Category {

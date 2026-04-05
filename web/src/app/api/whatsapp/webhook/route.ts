@@ -269,7 +269,7 @@ async function getUserContext(userId: string, currency: string) {
 
   const [{ data: accounts }, { data: monthTxs }, { data: recentTxs }, { data: budgets }] =
     await Promise.all([
-      supabase.from("accounts").select("name, balance, currency").eq("user_id", userId),
+      supabase.from("accounts").select("name, balance, currency").eq("user_id", userId).eq("is_active", true),
       supabase.from("transactions").select("type, amount, currency, category_id, categories(name)")
         .eq("user_id", userId).gte("date", firstOfMonth).lte("date", today),
       supabase.from("transactions").select("type, amount, currency, merchant, date, categories(name)")
@@ -774,6 +774,7 @@ export async function POST(req: NextRequest) {
     const { data: allAccounts } = await supabase
       .from("accounts").select("id, name, type, balance, currency")
       .eq("user_id", userId)
+      .eq("is_active", true)
       .order("is_primary", { ascending: false })
       .order("created_at", { ascending: true });
 
