@@ -681,7 +681,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
     // ── ACCOUNT_CREATION ──────────────────────────────────────────────────────
     if (intent.intent === "ACCOUNT_CREATION") {
-      const ac = intent.account_creation ?? {};
+      const ac = intent.account_creation ?? { name: null, type: null, currency: null };
       const accName: string | null = ac.name ?? null;
       let accType: string | null = ac.type ?? null;
       const accCurrency: string | null = ac.currency ?? null;
