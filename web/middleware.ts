@@ -25,41 +25,10 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // IMPORTANT: do not add logic between createServerClient and getUser()
-  const { data: { user } } = await supabase.auth.getUser();
+  // Refresh session cookies — required by Supabase SSR
+  // Use getSession() (local, no network call) to avoid redirect loops
+  await supabase.auth.getSession();
 
-  const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register");
-
-  // Helper: create redirect and ALWAYS copy Supabase session cookies
-  function redirect(to: string) {
-    const url = request.nextUrl.clone();
-    url.pathname = to;
-    const res = NextResponse.redirect(url);
-    // Copy session cookies so Supabase SSR doesn't corrupt the session
-    supabaseResponse.cookies.getAll().forEach((cookie) => {
-      res.cookies.set(cookie.name, cookie.value);
-    });
-    return res;
-  }
-
-  // Logged-in user hitting auth pages or landing → send to dashboard
-  if (user && (isAuthRoute || pathname === "/")) {
-    return redirect("/dashboard");
-  }
-
-  // Unauthenticated user hitting protected routes → send to login
-  const isPublic =
-    pathname === "/" ||
-    isAuthRoute ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/images");
-
-  if (!user && !isPublic) {
-    return redirect("/login");
-  }
-
-  // IMPORTANT: return supabaseResponse to preserve session cookies
   return supabaseResponse;
 }
 
