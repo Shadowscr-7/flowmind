@@ -12,6 +12,29 @@ import { Check, Zap, Crown, Loader2 } from "lucide-react";
 type Step = "form" | "plan";
 type Plan = "monthly" | "annual";
 
+const COUNTRY_CODES = [
+  { code: "+598", label: "Uruguay +598", flag: "🇺🇾" },
+  { code: "+54",  label: "Argentina +54", flag: "🇦🇷" },
+  { code: "+55",  label: "Brasil +55", flag: "🇧🇷" },
+  { code: "+56",  label: "Chile +56", flag: "🇨🇱" },
+  { code: "+57",  label: "Colombia +57", flag: "🇨🇴" },
+  { code: "+51",  label: "Perú +51", flag: "🇵🇪" },
+  { code: "+58",  label: "Venezuela +58", flag: "🇻🇪" },
+  { code: "+593", label: "Ecuador +593", flag: "🇪🇨" },
+  { code: "+595", label: "Paraguay +595", flag: "🇵🇾" },
+  { code: "+591", label: "Bolivia +591", flag: "🇧🇴" },
+  { code: "+52",  label: "México +52", flag: "🇲🇽" },
+  { code: "+502", label: "Guatemala +502", flag: "🇬🇹" },
+  { code: "+503", label: "El Salvador +503", flag: "🇸🇻" },
+  { code: "+504", label: "Honduras +504", flag: "🇭🇳" },
+  { code: "+505", label: "Nicaragua +505", flag: "🇳🇮" },
+  { code: "+506", label: "Costa Rica +506", flag: "🇨🇷" },
+  { code: "+507", label: "Panamá +507", flag: "🇵🇦" },
+  { code: "+1787", label: "Puerto Rico +1787", flag: "🇵🇷" },
+  { code: "+1809", label: "R. Dominicana +1809", flag: "🇩🇴" },
+  { code: "+34",  label: "España +34", flag: "🇪🇸" },
+];
+
 const MONTHLY_USD = 5;
 const ANNUAL_USD = 48; // $4/mes, 20% off
 
@@ -36,6 +59,7 @@ export default function RegisterPage() {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [countryCode, setCountryCode] = useState("+598");
   const [phone, setPhone] = useState("");
 
   // Plan
@@ -157,7 +181,8 @@ export default function RegisterPage() {
     const profileUpdate: Record<string, string> = { plan: "pro" };
     let normalizedPhone: string | null = null;
     if (phone.trim()) {
-      normalizedPhone = phone.trim().startsWith("+") ? phone.trim() : `+${phone.trim()}`;
+      const digits = phone.trim().replace(/^\+/, "");
+      normalizedPhone = `${countryCode}${digits}`;
       profileUpdate.whatsapp_phone = normalizedPhone;
     }
     await supabase.from("profiles").update(profileUpdate).eq("id", userId);
@@ -424,14 +449,32 @@ export default function RegisterPage() {
           autoComplete="new-password"
           hint="La contraseña debe tener al menos 6 caracteres"
         />
-        <Input
-          label="Teléfono WhatsApp (opcional)"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+59891234567"
-          hint="Con código de país. Para usar el bot de WhatsApp desde el primer día."
-        />
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-slate-700">
+            Teléfono WhatsApp (opcional)
+          </label>
+          <div className="flex gap-0">
+            <select
+              value={countryCode}
+              onChange={(e) => setCountryCode(e.target.value)}
+              className="rounded-l-xl rounded-r-none border border-r-0 border-slate-200 bg-white px-2 py-2.5 text-sm text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent hover:border-slate-300 shrink-0"
+            >
+              {COUNTRY_CODES.map(({ code, label, flag }) => (
+                <option key={code} value={code}>
+                  {flag} {label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="97479212"
+              className="flex-1 min-w-0 rounded-r-xl rounded-l-none border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent hover:border-slate-300"
+            />
+          </div>
+          <p className="text-xs text-slate-500">Sin el código de país. El número se guardará como {countryCode}{phone || "XXXXXXXX"}.</p>
+        </div>
         <Button type="submit" className="w-full" size="lg">
           Continuar →
         </Button>
