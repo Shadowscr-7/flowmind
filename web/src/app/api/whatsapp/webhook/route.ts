@@ -124,7 +124,7 @@ interface AccountInfo {
 }
 
 interface IntentResult {
-  intent: "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION" | "TRANSFER";
+  intent: "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION" | "TRANSFER" | "MY_INSIGHTS" | "ALERT_SETUP" | "SAVINGS_PLAN" | "SUPPORT_TICKET";
   transaction: {
     type: "expense" | "income";
     amount: number;
@@ -153,6 +153,24 @@ interface IntentResult {
     name: string | null;
     type: "bank" | "cash" | "savings" | "investment" | null;
     currency: string | null;
+  } | null;
+  alert_setup: {
+    type: "spending_limit" | "low_balance" | "goal_milestone" | "weekly_summary" | "unusual_spending" | null;
+    amount: number | null;
+    period: "daily" | "weekly" | "monthly" | null;
+    category: string | null;
+  } | null;
+  savings_plan: {
+    name: string | null;
+    target_amount: number | null;
+    currency: string | null;
+    target_date: string | null;
+    notes: string | null;
+  } | null;
+  support_ticket: {
+    subject: string | null;
+    message: string | null;
+    priority: "normal" | "high" | "urgent" | null;
   } | null;
 }
 
@@ -186,12 +204,15 @@ Analizá el INTENTO REAL del usuario aunque use lenguaje coloquial, indirecto o 
 Respondé ÚNICAMENTE con JSON válido (sin texto extra, sin markdown):
 
 {
-  "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION" | "TRANSFER",
+  "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION" | "TRANSFER" | "MY_INSIGHTS" | "ALERT_SETUP" | "SAVINGS_PLAN",
   "transaction": { "type": "expense"|"income", "amount": number, "currency": string, "merchant": string|null, "date": "YYYY-MM-DD", "category": string|null, "notes": string|null } | null,
   "transfer": { "amount": number, "currency": string, "from_account": string|null, "to_account": string|null, "date": "YYYY-MM-DD", "notes": string|null } | null,
   "query_type": "balance"|"monthly_summary"|"category_breakdown"|"recent"|"general" | null,
   "correction": { "action": "change_account"|"delete"|"change_amount"|"rename_account", "account_name": string|null, "new_amount": number|null, "new_name": string|null } | null,
-  "account_creation": { "name": string|null, "type": "bank"|"cash"|"savings"|"investment"|null, "currency": string|null } | null
+  "account_creation": { "name": string|null, "type": "bank"|"cash"|"savings"|"investment"|null, "currency": string|null } | null,
+  "alert_setup": { "type": "spending_limit"|"low_balance"|"goal_milestone"|"weekly_summary"|"unusual_spending"|null, "amount": number|null, "period": "daily"|"weekly"|"monthly"|null, "category": string|null } | null,
+  "savings_plan": { "name": string|null, "target_amount": number|null, "currency": string|null, "target_date": "YYYY-MM-DD"|null, "notes": string|null } | null,
+  "support_ticket": { "subject": string|null, "message": string|null, "priority": "normal"|"high"|"urgent"|null } | null
 }
 
 ── INTENTS ──────────────────────────────────────────────────────────────────
@@ -241,6 +262,29 @@ ACCOUNT_CREATION — crear o agregar una cuenta propia.
   "quiero agregar mi efectivo" → name: "Efectivo", type: "cash"
   "tengo una caja de ahorro en Itaú" → name: "Itaú", type: "savings"
 
+MY_INSIGHTS — pedir análisis o insights de sus finanzas.
+  "¿cómo voy financieramente?" / "dame un análisis" / "qué insights tengo" / "resumen financiero"
+  "¿cómo estoy?" cuando el contexto es análisis/sugerencias, no solo saldo
+
+ALERT_SETUP — configurar una alerta automática de gasto, saldo o meta.
+  "avisame si gasto más de 10000 en comida por mes" → type: spending_limit, amount: 10000, period: monthly, category: "comida"
+  "alertame si mi saldo baja de 5000" → type: low_balance, amount: 5000
+  "quiero un resumen semanal" → type: weekly_summary
+  "notificame si alcanzo el 50% de alguna meta" → type: goal_milestone, amount: 50
+  "quiero alerta de gasto inusual" → type: unusual_spending
+
+SAVINGS_PLAN — crear una meta o plan de ahorro.
+  "quiero ahorrar 50000 para vacaciones en diciembre" → name: "Vacaciones", target: 50000, date: 2026-12-01
+  "crear meta de ahorro para auto, 200000 USD" → name: "Auto", target: 200000, currency: "USD"
+  "quiero armar un plan de ahorro" → name: null, target: null (se pedirá más info)
+
+SUPPORT_TICKET — reclamos, quejas, reportes de problemas, pedidos de ayuda técnica.
+  "quiero hacer un reclamo" → subject: "Reclamo", message: null
+  "tengo un problema con el bot" → subject: "Problema con el bot", message: "..."
+  "no me funciona tal cosa" → subject: inferred, message: detail
+  "quiero reportar un error" → subject: "Reporte de error", message: "..."
+  priority: urgent si dice "urgente"/"no puedo usar nada", high si hay molestia clara, normal por defecto
+
 HELP — saludos, preguntas de uso, contenido no relacionado.
 
 ── REGLAS DE DESEMPATE ──────────────────────────────────────────────────────
@@ -252,11 +296,12 @@ HELP — saludos, preguntas de uso, contenido no relacionado.
 
   const raw = await gpt(system, text, "gpt-4o");
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return { intent: "HELP", transaction: null, transfer: null, query_type: null, correction: null, account_creation: null };
+  const defaultResult: IntentResult = { intent: "HELP", transaction: null, transfer: null, query_type: null, correction: null, account_creation: null, alert_setup: null, savings_plan: null, support_ticket: null };
+  if (!match) return defaultResult;
   try {
     return JSON.parse(match[0]) as IntentResult;
   } catch {
-    return { intent: "HELP", transaction: null, transfer: null, query_type: null, correction: null, account_creation: null };
+    return defaultResult;
   }
 }
 
@@ -887,11 +932,16 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         `👋 Hola *${userName}*! Soy tu asistente financiero. Podés hablarme de forma natural:\n\n` +
         `💸 *Gastos:* "Gasté 500 en el super" / "Pagué el alquiler 15000"\n` +
         `💰 *Ingresos:* "Cobré el sueldo 45000" / "Me entraron 8000"\n` +
+        `🔄 *Transferencias:* "Pasé 5000 del banco al efectivo"\n` +
         `📸 *Tickets:* Mandá una foto de cualquier factura\n` +
         `🎤 *Voz:* Mandá una nota de voz\n` +
         `📊 *Consultas:* "¿Cómo estoy este mes?" / "¿En qué gasté más?"\n` +
+        `🤖 *Análisis IA:* "Dame un análisis de mis finanzas"\n` +
+        `🔔 *Alertas:* "Avisame si gasto más de 10000 en comida"\n` +
+        `🎯 *Metas de ahorro:* "Quiero ahorrar 50000 para vacaciones"\n` +
         `✏️ *Correcciones:* "Ese gasto ponelo en Santander" / "Borrá el último"\n` +
-        `🏦 *Cuentas:* "Quiero crear una cuenta en el Itaú"`,
+        `🏦 *Cuentas:* "Quiero crear una cuenta en el Itaú"\n` +
+        `🎫 *Soporte:* "Quiero hacer un reclamo" / "Tengo un problema"`,
         { intent: "HELP" }
       );
       return NextResponse.json({ received: true });
@@ -1166,6 +1216,179 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       const answer = await answerQuery(processedText, ctx, userName);
       await reply(answer, { intent: "QUERY" });
       await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 2 }).eq("id", userId);
+      return NextResponse.json({ received: true });
+    }
+
+    // ── MY_INSIGHTS ───────────────────────────────────────────────────────────
+    if (intent.intent === "MY_INSIGHTS") {
+      const { data: insights } = await supabase
+        .from("ai_insights")
+        .select("kind, title, detail, severity, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (!insights || insights.length === 0) {
+        await reply(
+          `📊 *Insights IA — ${userName}*\n\n` +
+          `Aún no tenés análisis generados. Podés generarlos desde la app:\n👉 ${APP_URL}/insights\n\n` +
+          `También recibís un análisis automático cada lunes 🤖`
+        );
+      } else {
+        const sevEmoji: Record<string, string> = { info: "💡", warn: "⚠️", critical: "🚨" };
+        const lines = insights.map(ins =>
+          `${sevEmoji[ins.severity] ?? "💡"} *${ins.title}*\n${ins.detail}`
+        ).join("\n\n");
+        const date = new Date(insights[0].created_at).toLocaleDateString("es-UY");
+        await reply(
+          `📊 *Tus últimos insights* (${date})\n\n${lines}\n\n` +
+          `_Ver análisis completo → ${APP_URL}/insights_`
+        );
+      }
+      return NextResponse.json({ received: true });
+    }
+
+    // ── ALERT_SETUP ───────────────────────────────────────────────────────────
+    if (intent.intent === "ALERT_SETUP") {
+      const al = intent.alert_setup;
+
+      if (!al?.type) {
+        await reply(
+          `🔔 *Configurar alerta*\n\n¿Qué tipo de alerta querés?\n\n` +
+          `1️⃣ Límite de gasto (ej: "avisame si gasto más de X")\n` +
+          `2️⃣ Saldo bajo (ej: "alertame si mi saldo baja de X")\n` +
+          `3️⃣ Hito de meta (ej: "avisame cuando llegue al 50% de una meta")\n` +
+          `4️⃣ Resumen semanal (cada lunes por WhatsApp)\n` +
+          `5️⃣ Gasto inusual (cuando algo esté fuera de lo normal)\n\n` +
+          `Describílo con tus palabras y lo configuro 🤖`
+        );
+        return NextResponse.json({ received: true });
+      }
+
+      const catId = al.category ? await resolveCategoryId(userId!, al.category) : null;
+
+      const typeLabels: Record<string, string> = {
+        spending_limit: "Límite de gasto",
+        low_balance: "Saldo bajo",
+        goal_milestone: "Hito de meta",
+        weekly_summary: "Resumen semanal",
+        unusual_spending: "Gasto inusual",
+      };
+
+      const buildAlertTitle = () => {
+        if (al.type === "spending_limit") return `Límite${al.category ? ` ${al.category}` : ""} ${al.period === "weekly" ? "semanal" : al.period === "daily" ? "diario" : "mensual"}`;
+        if (al.type === "low_balance") return "Saldo bajo";
+        if (al.type === "goal_milestone") return `Hito de meta al ${al.amount ?? 50}%`;
+        if (al.type === "weekly_summary") return "Resumen semanal";
+        if (al.type === "unusual_spending") return `Gasto inusual${al.category ? ` — ${al.category}` : ""}`;
+        return "Alerta";
+      };
+
+      const row: Record<string, unknown> = {
+        user_id: userId,
+        type: al.type,
+        title: buildAlertTitle(),
+        is_active: true,
+        notify_whatsapp: true,
+        notify_web: true,
+      };
+      if (al.amount) row.threshold_amount = al.amount;
+      if (al.period) row.period = al.period;
+      if (catId) row.category_id = catId;
+
+      const { error: alertErr } = await supabase.from("smart_alerts").insert(row);
+
+      if (alertErr) {
+        await reply(`❌ No pude crear la alerta. Intentá desde la app: ${APP_URL}/alerts`);
+      } else {
+        const typeLabel = typeLabels[al.type] ?? al.type;
+        const amtStr = al.amount ? ` de $${al.amount.toLocaleString("es-UY")}` : "";
+        const periodStr = al.period ? ` por ${al.period === "monthly" ? "mes" : al.period === "weekly" ? "semana" : "día"}` : "";
+        const catStr = al.category ? ` en ${al.category}` : "";
+        await reply(
+          `✅ *Alerta configurada*\n\n` +
+          `🔔 *${typeLabel}*${amtStr}${catStr}${periodStr}\n\n` +
+          `Te voy a avisar por WhatsApp y en la app cuando se active.\n` +
+          `Podés verla y editarla en: ${APP_URL}/alerts`
+        );
+      }
+      return NextResponse.json({ received: true });
+    }
+
+    // ── SAVINGS_PLAN ──────────────────────────────────────────────────────────
+    if (intent.intent === "SAVINGS_PLAN") {
+      const sp = intent.savings_plan;
+
+      if (!sp?.name || !sp?.target_amount) {
+        await reply(
+          `🎯 *Plan de ahorro*\n\n` +
+          `Para crear tu meta de ahorro necesito saber:\n\n` +
+          `1. *¿Para qué querés ahorrar?* (ej: vacaciones, auto, fondo de emergencia)\n` +
+          `2. *¿Cuánto necesitás ahorrar?* (ej: 50000 UYU)\n` +
+          `3. *¿Para cuándo?* (opcional, ej: diciembre 2026)\n\n` +
+          `Podés decirme todo junto: _"Quiero ahorrar 80000 para vacaciones en julio"_`
+        );
+        return NextResponse.json({ received: true });
+      }
+
+      const goalCurrency = sp.currency ?? currency;
+      const { data: newGoal, error: goalErr } = await supabase.from("goals").insert({
+        user_id: userId,
+        name: sp.name,
+        target_amount: sp.target_amount,
+        current_amount: 0,
+        currency: goalCurrency,
+        target_date: sp.target_date ?? null,
+        notes: sp.notes ?? null,
+      }).select().single();
+
+      if (goalErr || !newGoal) {
+        await reply(`❌ No pude crear la meta. Intentá desde la app: ${APP_URL}/goals`);
+      } else {
+        const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 0 }).format(sp.target_amount);
+        const dateStr = sp.target_date ? `\n📅 Fecha límite: ${new Date(sp.target_date).toLocaleDateString("es-UY")}` : "";
+        await reply(
+          `🎯 *Meta de ahorro creada*\n\n` +
+          `✨ *${sp.name}*\n` +
+          `💵 ${goalCurrency} ${fmt}${dateStr}\n\n` +
+          `Podés ver el progreso y agregar aportes desde la app:\n👉 ${APP_URL}/goals\n\n` +
+          `¡Buena suerte! 💪`
+        );
+      }
+      return NextResponse.json({ received: true });
+    }
+
+    // ── SUPPORT_TICKET ────────────────────────────────────────────────────────
+    if (intent.intent === "SUPPORT_TICKET") {
+      const st = intent.support_ticket;
+      const subject = st?.subject ?? "Consulta de soporte";
+      const message = st?.message ?? processedText ?? "";
+      const priority = st?.priority ?? "normal";
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("whatsapp_phone")
+        .eq("id", userId!)
+        .single();
+
+      await supabase.from("support_tickets").insert({
+        user_id: userId,
+        phone: profileData?.whatsapp_phone ?? rawPhone,
+        display_name: userName,
+        subject,
+        message,
+        priority,
+        source: "whatsapp",
+        status: "open",
+      });
+
+      await reply(
+        `🎫 *Ticket de soporte creado*\n\n` +
+        `📋 *${subject}*\n\n` +
+        `Recibimos tu consulta y te responderemos a la brevedad. ` +
+        `Cuando esté resuelto, te avisamos por acá mismo. 🙏\n\n` +
+        `Si es urgente, podés describirlo con más detalle y lo priorizamos.`
+      );
       return NextResponse.json({ received: true });
     }
 

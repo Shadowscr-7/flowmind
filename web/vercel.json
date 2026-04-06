@@ -1,5 +1,15 @@
 {
   "framework": "nextjs",
   "buildCommand": "bun run build",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/ai-insights",
+      "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/cron/check-alerts",
+      "schedule": "0 9 * * *"
+    }
+  ]
 }

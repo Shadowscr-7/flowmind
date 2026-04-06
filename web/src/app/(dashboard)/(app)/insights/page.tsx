@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Sparkles, RefreshCw, TrendingUp, AlertTriangle, Info, Zap, Target, BarChart2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Sparkles, RefreshCw, TrendingUp, AlertTriangle, Info, Zap, Target, BarChart2, Bell, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -16,10 +16,14 @@ const CHART_COLORS = [
 ];
 
 interface Insight {
+  id?: string;
   kind: string;
   title: string;
   detail: string;
   severity: "info" | "warn" | "critical";
+  created_at?: string;
+  source?: string;
+  is_read?: boolean;
 }
 
 interface InsightSummary {
@@ -47,32 +51,19 @@ const KIND_ICONS: Record<string, typeof Info> = {
 };
 
 const SEVERITY_STYLES: Record<string, { card: string; icon: string; badge: string }> = {
-  info: {
-    card: "border-indigo-100 bg-indigo-50/50",
-    icon: "text-indigo-500",
-    badge: "bg-indigo-100 text-indigo-700",
-  },
-  warn: {
-    card: "border-amber-100 bg-amber-50/50",
-    icon: "text-amber-500",
-    badge: "bg-amber-100 text-amber-700",
-  },
-  critical: {
-    card: "border-red-100 bg-red-50/50",
-    icon: "text-red-500",
-    badge: "bg-red-100 text-red-700",
-  },
+  info:     { card: "border-indigo-100 bg-indigo-50/50",  icon: "text-indigo-500",  badge: "bg-indigo-100 text-indigo-700" },
+  warn:     { card: "border-amber-100 bg-amber-50/50",    icon: "text-amber-500",   badge: "bg-amber-100 text-amber-700" },
+  critical: { card: "border-red-100 bg-red-50/50",        icon: "text-red-500",     badge: "bg-red-100 text-red-700" },
 };
 
-const MONTHS = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
+const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 export default function InsightsPage() {
+  const supabase = useMemo(() => createClient(), []);
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [insights, setInsights] = useState<Insight[]>([]);
+  const [savedInsights, setSavedInsights] = useState<Insight[]>([]);
   const [summary, setSummary] = useState<InsightSummary | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,8 +71,8 @@ export default function InsightsPage() {
   const [trendData, setTrendData] = useState<TrendData[]>([]);
   const [currency, setCurrency] = useState("UYU");
   const [loadingCharts, setLoadingCharts] = useState(true);
+  const [loadingSaved, setLoadingSaved] = useState(true);
 
-  // Generate month options (last 12 months)
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     return {
@@ -90,81 +81,83 @@ export default function InsightsPage() {
     };
   });
 
-  useEffect(() => {
-    loadCharts();
-  }, []);
+  useEffect(() => { loadCharts(); loadSavedInsights(); }, []);
+
+  // Load previously generated insights from DB
+  async function loadSavedInsights() {
+    setLoadingSaved(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("ai_insights")
+      .select("id, kind, title, detail, severity, created_at, source, is_read")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setSavedInsights((data as Insight[]) ?? []);
+    setLoadingSaved(false);
+  }
+
+  async function markRead(id: string) {
+    await supabase.from("ai_insights").update({ is_read: true }).eq("id", id);
+    setSavedInsights(prev => prev.map(i => i.id === id ? { ...i, is_read: true } : i));
+  }
 
   async function loadCharts() {
     setLoadingCharts(true);
-    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("currency_default, plan")
-      .eq("id", user.id)
-      .single();
+    const { data: profile } = await supabase.from("profiles").select("currency_default").eq("id", user.id).single();
     setCurrency(profile?.currency_default ?? "UYU");
 
-const { start, end } = getMonthRange();
+    const { start, end } = getMonthRange();
     const { data: txs } = await supabase
-      .from("transactions")
-      .select("amount, categories(id, name)")
-      .eq("type", "expense")
-      .gte("date", start)
-      .lte("date", end);
+      .from("transactions").select("amount, categories!category_id(name)")
+      .eq("user_id", user.id).eq("type", "expense").gte("date", start).lte("date", end);
 
     const catMap = new Map<string, { name: string; value: number }>();
     for (const tx of txs ?? []) {
-      const cat = tx.categories as unknown as { id: string; name: string } | null;
-      const key = cat?.id ?? "uncategorized";
-      const name = cat?.name ?? "Sin categoría";
-      catMap.set(key, { name, value: (catMap.get(key)?.value ?? 0) + (tx.amount as number) });
+      const cat = tx.categories as unknown as { name: string } | null;
+      const key = cat?.name ?? "Sin categoría";
+      catMap.set(key, { name: key, value: (catMap.get(key)?.value ?? 0) + (tx.amount as number) });
     }
-    const catArr = Array.from(catMap.values())
-      .sort((a, b) => b.value - a.value)
-      .map((c, i) => ({ name: c.name, value: c.value, color: CHART_COLORS[i % CHART_COLORS.length] }));
-    setCategoryData(catArr);
+    setCategoryData(
+      Array.from(catMap.values()).sort((a, b) => b.value - a.value)
+        .map((c, i) => ({ ...c, color: CHART_COLORS[i % CHART_COLORS.length] }))
+    );
 
     const trend: TrendData[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date();
       d.setMonth(d.getMonth() - i);
       const { start: mStart, end: mEnd } = getMonthRange(d);
-      const monthLabel = new Intl.DateTimeFormat("es-UY", { month: "short" }).format(d);
-      const { data: monthTxs } = await supabase
-        .from("transactions").select("type, amount").gte("date", mStart).lte("date", mEnd);
-      const income = (monthTxs ?? []).filter(t => t.type === "income").reduce((s, t) => s + (t.amount as number), 0);
-      const expenses = (monthTxs ?? []).filter(t => t.type === "expense").reduce((s, t) => s + (t.amount as number), 0);
-      trend.push({ month: monthLabel, income, expenses });
+      const label = new Intl.DateTimeFormat("es-UY", { month: "short" }).format(d);
+      const { data: mTxs } = await supabase.from("transactions").select("type, amount").eq("user_id", user.id).gte("date", mStart).lte("date", mEnd);
+      trend.push({
+        month: label,
+        income: (mTxs ?? []).filter(t => t.type === "income").reduce((s, t) => s + (t.amount as number), 0),
+        expenses: (mTxs ?? []).filter(t => t.type === "expense").reduce((s, t) => s + (t.amount as number), 0),
+      });
     }
     setTrendData(trend);
     setLoadingCharts(false);
   }
 
-  async function generateInsights(refresh = false) {
+  async function generateInsights() {
     setGenerating(true);
     setError(null);
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
     try {
-      const url = new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/insights-summary`);
-      url.searchParams.set("month", selectedMonth);
-      if (refresh) url.searchParams.set("refresh", "true");
-
-      const res = await fetch(url.toString(), {
+      const res = await fetch("/api/insights/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({}),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: selectedMonth }),
       });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const json = await res.json();
       setInsights(json.insights ?? []);
       setSummary(json.summary ?? null);
+      await loadSavedInsights(); // refresh saved list
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error desconocido");
     } finally {
@@ -174,6 +167,7 @@ const { start, end } = getMonthRange();
 
   const [month, year] = selectedMonth.split("-").map(Number);
   const monthLabel = `${MONTHS[month - 1]} ${year}`;
+  const unreadCount = savedInsights.filter(i => !i.is_read).length;
 
   return (
     <>
@@ -194,42 +188,28 @@ const { start, end } = getMonthRange();
                 onChange={e => setSelectedMonth(e.target.value)}
                 className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                {monthOptions.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
+                {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
-            <Button
-              onClick={() => generateInsights(false)}
-              loading={generating}
-              icon={<Sparkles className="h-4 w-4" />}
-            >
+            <Button onClick={generateInsights} loading={generating} icon={<Sparkles className="h-4 w-4" />}>
               Generar análisis
             </Button>
             {insights.length > 0 && (
-              <Button
-                variant="secondary"
-                onClick={() => generateInsights(true)}
-                loading={generating}
-                icon={<RefreshCw className="h-4 w-4" />}
-              >
+              <Button variant="secondary" onClick={generateInsights} loading={generating} icon={<RefreshCw className="h-4 w-4" />}>
                 Regenerar
               </Button>
             )}
           </div>
 
-          {error && (
-            <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700">{error}</div>
-          )}
+          {error && <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700">{error}</div>}
 
-          {/* Summary strip */}
           {summary && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {[
-                { label: "Ingresos", value: formatCurrency(summary.total_income, currency), color: "text-emerald-600" },
-                { label: "Gastos", value: formatCurrency(summary.total_expenses, currency), color: "text-red-500" },
-                { label: "Neto", value: formatCurrency(summary.net, currency), color: summary.net >= 0 ? "text-emerald-600" : "text-red-500" },
-                { label: "Burn diario", value: formatCurrency(summary.daily_burn_rate, currency), color: "text-slate-600" },
+                { label: "Ingresos",   value: formatCurrency(summary.total_income,    currency), color: "text-emerald-600" },
+                { label: "Gastos",     value: formatCurrency(summary.total_expenses,  currency), color: "text-red-500" },
+                { label: "Neto",       value: formatCurrency(summary.net,             currency), color: summary.net >= 0 ? "text-emerald-600" : "text-red-500" },
+                { label: "Burn diario",value: formatCurrency(summary.daily_burn_rate, currency), color: "text-slate-600" },
               ].map(item => (
                 <div key={item.label} className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
                   <p className="text-xs text-slate-400 mb-1">{item.label}</p>
@@ -239,42 +219,67 @@ const { start, end } = getMonthRange();
             </div>
           )}
 
-          {/* Insight cards */}
-          {insights.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-600">{monthLabel}</h3>
-              {insights.map((insight, i) => {
-                const styles = SEVERITY_STYLES[insight.severity] ?? SEVERITY_STYLES.info;
-                const Icon = KIND_ICONS[insight.kind] ?? Info;
-                return (
-                  <div key={i} className={`p-4 rounded-xl border ${styles.card}`}>
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 shrink-0 ${styles.icon}`}>
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <p className="text-sm font-semibold text-slate-800">{insight.title}</p>
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${styles.badge}`}>
-                            {insight.severity === "critical" ? "Crítico" : insight.severity === "warn" ? "Atención" : "Info"}
-                          </span>
-                        </div>
-                        <p className="text-sm text-slate-600 leading-relaxed">{insight.detail}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <InsightList insights={insights} monthLabel={monthLabel} />
 
           {!generating && insights.length === 0 && !error && (
             <div className="text-center py-10 text-slate-400">
               <Sparkles className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm">Seleccioná un período y generá tu análisis</p>
+              <p className="text-xs mt-1 text-slate-300">También recibís análisis automáticos cada lunes por WhatsApp</p>
             </div>
           )}
         </Card>
+
+        {/* Saved/historical insights from cron */}
+        {!loadingSaved && savedInsights.length > 0 && (
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-indigo-500" />
+                  Historial de análisis
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">{unreadCount} nuevo{unreadCount > 1 ? "s" : ""}</span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Generados automáticamente cada semana</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {savedInsights.map(ins => {
+                const styles = SEVERITY_STYLES[ins.severity] ?? SEVERITY_STYLES.info;
+                const Icon = KIND_ICONS[ins.kind] ?? Info;
+                return (
+                  <div key={ins.id} className={`p-3 rounded-xl border transition-all ${ins.is_read ? "opacity-60" : ""} ${styles.card}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 shrink-0 ${styles.icon}`}><Icon className="h-4 w-4" /></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-slate-800">{ins.title}</p>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${styles.badge}`}>
+                            {ins.severity === "critical" ? "Crítico" : ins.severity === "warn" ? "Atención" : "Info"}
+                          </span>
+                          {ins.source === "cron_weekly" && (
+                            <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">Semanal</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{ins.detail}</p>
+                        {ins.created_at && (
+                          <p className="text-[10px] text-slate-400 mt-1">{new Date(ins.created_at).toLocaleDateString("es-UY")}</p>
+                        )}
+                      </div>
+                      {!ins.is_read && ins.id && (
+                        <button onClick={() => markRead(ins.id!)} className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors" title="Marcar como leído">
+                          <Check className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -301,7 +306,6 @@ const { start, end } = getMonthRange();
               </>
             )}
           </Card>
-
           <Card>
             <CardHeader title="Tendencia mensual" subtitle="Últimos 6 meses" />
             {loadingCharts ? (
@@ -313,5 +317,34 @@ const { start, end } = getMonthRange();
         </div>
       </main>
     </>
+  );
+}
+
+function InsightList({ insights, monthLabel }: { insights: Insight[]; monthLabel: string }) {
+  if (insights.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-slate-600">{monthLabel}</h3>
+      {insights.map((insight, i) => {
+        const styles = SEVERITY_STYLES[insight.severity] ?? SEVERITY_STYLES.info;
+        const Icon = KIND_ICONS[insight.kind] ?? Info;
+        return (
+          <div key={i} className={`p-4 rounded-xl border ${styles.card}`}>
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 shrink-0 ${styles.icon}`}><Icon className="h-5 w-5" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <p className="text-sm font-semibold text-slate-800">{insight.title}</p>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${styles.badge}`}>
+                    {insight.severity === "critical" ? "Crítico" : insight.severity === "warn" ? "Atención" : "Info"}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed">{insight.detail}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
