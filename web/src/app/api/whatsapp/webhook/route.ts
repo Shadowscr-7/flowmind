@@ -567,6 +567,11 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   investment: "Inversiones",
 };
 
+// Pending expires in 10 minutes
+function pendingExpiry() {
+  return new Date(Date.now() + 10 * 60 * 1000).toISOString();
+}
+
 function resolveAccountType(input: string): string | null {
   return ACCOUNT_TYPES[input.toLowerCase().trim()] ?? null;
 }
@@ -697,7 +702,7 @@ export async function POST(req: NextRequest) {
             const remaining = accounts.filter(a => a.id !== selected.id);
             const list = remaining.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
             await supabase.from("whatsapp_pending").insert({
-              phone: rawPhone, user_id: userId, pending_type: "transfer_select_to",
+              phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "transfer_select_to",
               payload: { amount, currency: txCurrency, from_account_id: selected.id, from_account_name: selected.name, date, notes, accounts: remaining },
             });
             await reply(`¿A qué cuenta va el dinero?\n\n${list}\n\n_Respondé con el número._`);
@@ -916,7 +921,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
           const accountList = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
           const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(parsed.amount);
           await supabase.from("whatsapp_pending").insert({
-            phone: rawPhone, user_id: userId, pending_type: "account_selection",
+            phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "account_selection",
             payload: { ...txPayload, accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
           await reply(
@@ -983,7 +988,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       if (!accType) {
         // Ask for type
         await supabase.from("whatsapp_pending").insert({
-          phone: rawPhone, user_id: userId, pending_type: "account_creation_type",
+          phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "account_creation_type",
           payload: { name: accName, currency: accCurrency ?? currency },
         });
         const nameStr = accName ? ` para *${accName}*` : "";
@@ -1001,7 +1006,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       // Save confirmation pending
       const finalCurrency2 = accCurrency ?? currency;
       await supabase.from("whatsapp_pending").insert({
-        phone: rawPhone, user_id: userId, pending_type: "account_creation_confirm",
+        phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "account_creation_confirm",
         payload: { name: accName, type: accType, currency: finalCurrency2 },
       });
       await reply(
@@ -1034,7 +1039,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
         const emoji = tx.type === "income" ? "💰" : "💸";
         await supabase.from("whatsapp_pending").insert({
-          phone: rawPhone, user_id: userId, pending_type: "account_selection",
+          phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "account_selection",
           payload: { ...tx, source, accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
         });
         await reply(
@@ -1077,7 +1082,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         const eligible = toAcc ? allAccounts.filter(a => a.id !== toAcc.id) : allAccounts;
         const list = eligible.map((a, i) => `${i + 1}. ${a.name} (${txCurrency} ${a.balance})`).join("\n");
         await supabase.from("whatsapp_pending").insert({
-          phone: rawPhone, user_id: userId, pending_type: "transfer_select_from",
+          phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "transfer_select_from",
           payload: {
             amount: tr.amount, currency: txCurrency, date: txDate, notes: tr.notes,
             to_account_id: toAcc?.id ?? null, to_account_name: toAcc?.name ?? null,
@@ -1096,7 +1101,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         const eligible = allAccounts.filter(a => a.id !== fromAcc.id);
         const list = eligible.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
         await supabase.from("whatsapp_pending").insert({
-          phone: rawPhone, user_id: userId, pending_type: "transfer_select_to",
+          phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "transfer_select_to",
           payload: {
             amount: tr.amount, currency: txCurrency, date: txDate, notes: tr.notes,
             from_account_id: fromAcc.id, from_account_name: fromAcc.name,
@@ -1176,7 +1181,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
           }
           const list = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
           await supabase.from("whatsapp_pending").insert({
-            phone: rawPhone, user_id: userId, pending_type: "account_selection",
+            phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "account_selection",
             payload: { correction_tx_id: lastTx.id, correction_label: txLabel,
               accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
@@ -1206,7 +1211,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         } else {
           const list = matchedAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
           await supabase.from("whatsapp_pending").insert({
-            phone: rawPhone, user_id: userId, pending_type: "account_selection",
+            phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "account_selection",
             payload: { correction_tx_id: lastTx.id, correction_label: txLabel,
               accounts: matchedAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
