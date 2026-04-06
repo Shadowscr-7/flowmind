@@ -402,6 +402,17 @@ async function insertTransaction(
   currency: string,
   sendReply: (text: string, opts?: { intent?: string; transactionId?: string }) => Promise<void>
 ) {
+  // Check balance before saving (for expense only)
+  let balanceWarning = "";
+  if (tx.type === "expense") {
+    const { data: acc } = await db()
+      .from("accounts").select("balance, currency").eq("id", accountId).single();
+    if (acc && acc.balance < tx.amount) {
+      const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(acc.balance);
+      balanceWarning = `\n\n⚠️ _Saldo insuficiente: tu cuenta tiene ${acc.currency} ${fmt}. El gasto fue registrado igual._`;
+    }
+  }
+
   const categoryId = await resolveCategoryId(userId, tx.category);
   const { data: saved, error: txErr } = await db().from("transactions").insert({
     user_id: userId,
@@ -433,7 +444,8 @@ async function insertTransaction(
     `💵 ${tx.currency ?? currency} ${amt}\n` +
     `📅 ${tx.date ?? "hoy"}\n` +
     (tx.notes ? `📝 ${tx.notes}\n` : "") +
-    `\n✅ Registrado exitosamente`,
+    `\n✅ Registrado exitosamente` +
+    balanceWarning,
     { intent: "TRANSACTION", transactionId: saved.id }
   );
 }

@@ -12,6 +12,7 @@ interface TransactionFilters {
   accountId?: string;
   page?: number;
   pageSize?: number;
+  showArchived?: boolean;
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
@@ -28,6 +29,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     accountId,
     page = 0,
     pageSize = 20,
+    showArchived = false,
   } = filters;
 
   const fetchTransactions = useCallback(async () => {
@@ -40,6 +42,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
 
+    if (!showArchived) query = query.eq("is_archived", false);
     if (startDate) query = query.gte("date", startDate);
     if (endDate) query = query.lte("date", endDate);
     if (type && type !== "all") query = query.eq("type", type);
@@ -57,7 +60,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
       setCount(total ?? 0);
     }
     setLoading(false);
-  }, [startDate, endDate, type, categoryId, accountId, page, pageSize]);
+  }, [startDate, endDate, type, categoryId, accountId, page, pageSize, showArchived]);
 
   useEffect(() => {
     fetchTransactions();
@@ -77,6 +80,7 @@ export function useRecentTransactions(limit = 5) {
       const { data } = await supabase
         .from("transactions")
         .select("*, accounts!account_id(id, name, type), categories(id, name, icon, color)")
+        .eq("is_archived", false)
         .order("date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(limit);
@@ -111,6 +115,7 @@ export function useMonthTransactions() {
       const { data } = await supabase
         .from("transactions")
         .select("type, amount")
+        .eq("is_archived", false)
         .gte("date", start)
         .lte("date", end);
 

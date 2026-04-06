@@ -112,7 +112,7 @@ export default function AddPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -128,9 +128,9 @@ export default function AddPage() {
     loadMeta();
   }, []);
 
-  function showToast(type: "success" | "error", message: string) {
+  function showToast(type: "success" | "error" | "warning", message: string) {
     setToast({ type, message });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 5000);
   }
 
   function onSuccess() {
@@ -145,16 +145,20 @@ export default function AddPage() {
         {/* Toast */}
         {toast && (
           <div
-            className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${
+            className={`fixed top-4 right-4 z-50 flex items-start gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm ${
               toast.type === "success"
                 ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                : toast.type === "warning"
+                ? "bg-amber-50 text-amber-800 border border-amber-200"
                 : "bg-red-50 text-red-800 border border-red-200"
             }`}
           >
             {toast.type === "success" ? (
-              <CheckCircle className="h-4 w-4 text-emerald-500" />
+              <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+            ) : toast.type === "warning" ? (
+              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
             )}
             {toast.message}
           </div>
@@ -190,12 +194,31 @@ export default function AddPage() {
           <div className="flex justify-center py-12">
             <Spinner />
           </div>
+        ) : accounts.length === 0 ? (
+          /* ── No accounts guard ── */
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <div className="h-16 w-16 rounded-2xl bg-indigo-50 flex items-center justify-center">
+              <AlertCircle className="h-8 w-8 text-indigo-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-1">
+                Primero necesitás configurar una cuenta
+              </p>
+              <p className="text-xs text-slate-400">
+                Antes de registrar transacciones, creá al menos una cuenta (banco, efectivo, etc.)
+              </p>
+            </div>
+            <Button onClick={() => router.push("/accounts")} icon={<CheckCircle className="h-4 w-4" />}>
+              Ir a Cuentas
+            </Button>
+          </div>
         ) : tab === "ai" ? (
           <AIForm
             accounts={accounts}
             categories={categories}
             onSuccess={onSuccess}
             onError={(m) => showToast("error", m)}
+            onWarn={(m) => showToast("warning", m)}
           />
         ) : (
           <ManualForm
@@ -203,11 +226,34 @@ export default function AddPage() {
             categories={categories}
             onSuccess={onSuccess}
             onError={(m) => showToast("error", m)}
+            onWarn={(m) => showToast("warning", m)}
           />
         )}
       </main>
     </>
   );
+}
+
+// ─── Balance check helper ─────────────────────────────────────────────────────
+async function checkBalance(
+  supabase: ReturnType<typeof createClient>,
+  accountId: string,
+  amount: number,
+  txType: string,
+  onWarn: (m: string) => void
+) {
+  if (txType !== "expense") return;
+  const { data } = await supabase
+    .from("accounts")
+    .select("name, balance, currency")
+    .eq("id", accountId)
+    .single();
+  if (data && data.balance < amount) {
+    const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(data.balance);
+    onWarn(
+      `⚠️ Gasto registrado, pero el saldo de "${data.name}" es ${data.currency} ${fmt} — insuficiente para cubrir este gasto.`
+    );
+  }
 }
 
 // ─── AI Form ──────────────────────────────────────────────────────────────────
@@ -216,11 +262,13 @@ function AIForm({
   categories,
   onSuccess,
   onError,
+  onWarn,
 }: {
   accounts: Account[];
   categories: Category[];
   onSuccess: () => void;
   onError: (m: string) => void;
+  onWarn: (m: string) => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [txType, setTxType] = useState<"expense" | "income" | "transfer">("expense");
@@ -386,12 +434,28 @@ function AIForm({
     };
 
     try {
+      // Check balance BEFORE saving for the warning message
+      let balanceWarning = "";
+      if (txType === "expense") {
+        const { data: acc } = await supabase
+          .from("accounts").select("name, balance, currency").eq("id", accountId).single();
+        if (acc && acc.balance < editedDraft.amount) {
+          const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(acc.balance);
+          balanceWarning = `⚠️ Gasto registrado. El saldo de "${acc.name}" (${acc.currency} ${fmt}) no cubre este monto.`;
+        }
+      }
+
       await saveTransaction(supabase, user.id, {
         ...editedDraft,
         account_id: accountId,
         transfer_to_account_id: txType === "transfer" ? transferToId || null : null,
         source: sourceMap[inputMode],
       });
+
+      if (balanceWarning) {
+        onWarn(balanceWarning);
+        setTimeout(() => { /* navigate handled by onSuccess equivalent */ }, 0);
+      }
       onSuccess();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Error al guardar");
@@ -746,11 +810,13 @@ function ManualForm({
   categories,
   onSuccess,
   onError,
+  onWarn,
 }: {
   accounts: Account[];
   categories: Category[];
   onSuccess: () => void;
   onError: (m: string) => void;
+  onWarn: (m: string) => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [type, setType] = useState<"expense" | "income" | "transfer">("expense");
@@ -772,15 +838,28 @@ function ManualForm({
       return;
     }
     setLoading(true);
-    await Promise.resolve(); // yield to browser for paint before async work
+    await Promise.resolve();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { onError("No autenticado"); setLoading(false); return; }
 
     try {
+      const parsedAmount = parseFloat(amount);
+
+      // Balance check before saving
+      let balanceWarning = "";
+      if (type === "expense") {
+        const { data: acc } = await supabase
+          .from("accounts").select("name, balance, currency").eq("id", accountId).single();
+        if (acc && acc.balance < parsedAmount) {
+          const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(acc.balance);
+          balanceWarning = `⚠️ Gasto registrado. El saldo de "${acc.name}" (${acc.currency} ${fmt}) no cubre este monto.`;
+        }
+      }
+
       await saveTransaction(supabase, user.id, {
         type,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         currency,
         merchant: merchant || null,
         date,
@@ -790,6 +869,8 @@ function ManualForm({
         transfer_to_account_id: type === "transfer" ? transferToId : null,
         source: "manual",
       });
+
+      if (balanceWarning) onWarn(balanceWarning);
       onSuccess();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Error al guardar");

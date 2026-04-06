@@ -50,6 +50,7 @@ export interface Transaction {
   confidence: number | null;
   is_confirmed: boolean;
   is_recurring: boolean;
+  is_archived: boolean;
   notes: string | null;
   accounts?: Account;
   categories?: Category;
