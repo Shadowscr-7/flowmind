@@ -155,11 +155,21 @@ export default function RegisterPage() {
 
     // 2. Update profile: phone + plan
     const profileUpdate: Record<string, string> = { plan: "pro" };
+    let normalizedPhone: string | null = null;
     if (phone.trim()) {
-      const normalized = phone.trim().startsWith("+") ? phone.trim() : `+${phone.trim()}`;
-      profileUpdate.whatsapp_phone = normalized;
+      normalizedPhone = phone.trim().startsWith("+") ? phone.trim() : `+${phone.trim()}`;
+      profileUpdate.whatsapp_phone = normalizedPhone;
     }
     await supabase.from("profiles").update(profileUpdate).eq("id", userId);
+
+    // Send WhatsApp welcome message (fire-and-forget)
+    if (normalizedPhone) {
+      void fetch("/api/whatsapp/send-welcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalizedPhone, name: displayName }),
+      });
+    }
 
     // 3. Record PayPal subscription server-side (verify + store in DB)
     await fetch("/api/paypal/activate-subscription", {

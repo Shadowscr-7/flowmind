@@ -114,15 +114,32 @@ export default function SettingsPage() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // Check previous value to detect first-time link
+    const { data: prev } = await supabase.from("profiles").select("whatsapp_phone, display_name").eq("id", user.id).single();
+    const wasEmpty = !prev?.whatsapp_phone;
+
     const phone = waPhone.trim();
+    const normalized = phone && !phone.startsWith("+") ? `+${phone}` : phone;
+
     const { error } = await supabase
       .from("profiles")
-      .update({ whatsapp_phone: phone || null })
+      .update({ whatsapp_phone: normalized || null })
       .eq("id", user.id);
+
+    if (!error && normalized && wasEmpty) {
+      // First time linking — send welcome message (fire-and-forget)
+      void fetch("/api/whatsapp/send-welcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalized, name: prev?.display_name ?? displayName }),
+      });
+    }
+
     setWaMsg(
       error
         ? { type: "error", text: error.message }
-        : { type: "success", text: phone ? "Número vinculado correctamente" : "Número desvinculado" }
+        : { type: "success", text: normalized ? "Número vinculado correctamente" : "Número desvinculado" }
     );
     setSavingWa(false);
   }
