@@ -18,6 +18,7 @@ import {
   LogOut,
   LifeBuoy,
   Ticket,
+  Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -37,6 +38,7 @@ const navItems = [
 ];
 
 const adminItems = [
+  { href: "/admin/users",         icon: Users,          label: "Usuarios" },
   { href: "/admin/conversations", icon: MessagesSquare, label: "Conversaciones" },
   { href: "/admin/tickets",       icon: Ticket,         label: "Tickets" },
   { href: "/settings/whatsapp",   icon: MessageSquare,  label: "WhatsApp Admin" },
