@@ -559,11 +559,6 @@ function resolveAccountType(input: string): string | null {
   return ACCOUNT_TYPES[input.toLowerCase().trim()] ?? null;
 }
 
-// ─── GET: Evolution webhook verification ─────────────────────────────────────
-export async function GET() {
-  return NextResponse.json({ ok: true, service: "flowmind-whatsapp-webhook" });
-}
-
 // ─── Main webhook handler ─────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
