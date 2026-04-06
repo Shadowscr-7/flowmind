@@ -182,7 +182,20 @@ export default function RegisterPage() {
       }),
     });
 
-    // 4. Redirect or show email confirmation screen
+    // 4. Fire Meta Pixel Purchase event
+    const planValue = selectedPlan === "annual" ? 48 : 5;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fbq = (window as any).fbq;
+    if (typeof fbq === "function") {
+      fbq("track", "Purchase", {
+        value: planValue,
+        currency: "USD",
+        content_name: selectedPlan === "annual" ? "FlowMind Pro Anual" : "FlowMind Pro Mensual",
+        content_type: "product",
+      });
+    }
+
+    // 5. Redirect or show email confirmation screen
     if (data.session) {
       router.push("/dashboard");
       router.refresh();
