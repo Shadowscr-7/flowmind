@@ -559,17 +559,19 @@ function resolveAccountType(input: string): string | null {
   return ACCOUNT_TYPES[input.toLowerCase().trim()] ?? null;
 }
 
+// ─── GET: Evolution webhook verification ─────────────────────────────────────
+export async function GET() {
+  return NextResponse.json({ ok: true, service: "flowmind-whatsapp-webhook" });
+}
+
 // ─── Main webhook handler ─────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Verify the request comes from Evolution API using the shared API key
-  const incomingKey = req.headers.get("apikey");
-  if (!incomingKey || incomingKey !== EVO_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const body = await req.json();
-    if (body.event !== "messages.upsert") return NextResponse.json({ received: true });
+
+    // Normalize event name: Evolution v1 sends "MESSAGES_UPSERT", v2 sends "messages.upsert"
+    const event: string = (body.event ?? "").toLowerCase().replace(/_/g, ".");
+    if (event !== "messages.upsert") return NextResponse.json({ received: true });
 
     // Cleanup expired pending states (fire-and-forget)
     void db().from("whatsapp_pending").delete().lt("expires_at", new Date().toISOString());
