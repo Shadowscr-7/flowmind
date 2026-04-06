@@ -10,7 +10,9 @@ import {
   CheckCircle,
   AlertCircle,
   MessageSquare,
+  ExternalLink,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -262,6 +264,38 @@ export default function SettingsPage() {
             title="WhatsApp"
             subtitle="Registrá gastos e ingresos enviando mensajes al bot"
           />
+
+          {/* QR + open chat */}
+          <div className="mb-5 flex flex-col sm:flex-row items-center gap-5 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
+            <div className="shrink-0 bg-white p-2 rounded-xl shadow-sm border border-emerald-100">
+              <QRCodeSVG
+                value="https://wa.me/59892797033"
+                size={120}
+                fgColor="#075E54"
+                bgColor="#ffffff"
+                level="M"
+              />
+            </div>
+            <div className="flex-1 text-center sm:text-left space-y-2">
+              <p className="text-sm font-semibold text-emerald-800">
+                Escaneá el QR para abrir el chat
+              </p>
+              <p className="text-xs text-emerald-700">
+                Apuntá la cámara de tu celular al código o tocá el botón para abrir WhatsApp directamente.
+              </p>
+              <a
+                href="https://wa.me/59892797033"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-2 rounded-xl transition-colors"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Abrir chat en WhatsApp
+                <ExternalLink className="h-3 w-3 opacity-70" />
+              </a>
+            </div>
+          </div>
+
           <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-sm text-emerald-700 flex items-start gap-2">
             <MessageSquare className="h-4 w-4 shrink-0 mt-0.5" />
             <span>
