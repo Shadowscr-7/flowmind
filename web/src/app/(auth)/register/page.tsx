@@ -182,15 +182,21 @@ export default function RegisterPage() {
       }),
     });
 
-    // 4. Fire Meta Pixel Purchase event
+    // 4. Fire Meta Pixel events (Subscribe + Purchase)
     const planValue = selectedPlan === "annual" ? 48 : 5;
+    const planName = selectedPlan === "annual" ? "FlowMind Pro Anual" : "FlowMind Pro Mensual";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fbq = (window as any).fbq;
     if (typeof fbq === "function") {
+      fbq("track", "Subscribe", {
+        value: planValue,
+        currency: "USD",
+        predicted_ltv: planValue,
+      });
       fbq("track", "Purchase", {
         value: planValue,
         currency: "USD",
-        content_name: selectedPlan === "annual" ? "FlowMind Pro Anual" : "FlowMind Pro Mensual",
+        content_name: planName,
         content_type: "product",
       });
     }
