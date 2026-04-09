@@ -71,7 +71,7 @@ export interface Goal {
   user_id: string;
   name: string;
   target_amount: number;
-  target_date: string | null;
+  deadline: string | null;
   current_amount: number;
   currency: string;
 }

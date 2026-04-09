@@ -1352,8 +1352,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         target_amount: sp.target_amount,
         current_amount: 0,
         currency: goalCurrency,
-        target_date: sp.target_date ?? null,
-        notes: sp.notes ?? null,
+        deadline: sp.target_date ?? null,
       }).select().single();
 
       if (goalErr || !newGoal) {

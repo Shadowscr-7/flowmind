@@ -33,7 +33,7 @@ export default function GoalsPage() {
     const { data } = await supabase
       .from("goals")
       .select("*")
-      .order("target_date", { ascending: true });
+      .order("deadline", { ascending: true });
     setGoals((data as Goal[]) ?? []);
     setLoading(false);
   }, []);
@@ -57,7 +57,7 @@ export default function GoalsPage() {
       user_id: user.id,
       name,
       target_amount: parseFloat(targetAmount),
-      target_date: targetDate || null,
+      deadline: targetDate || null,
       current_amount: 0,
       currency,
     });
@@ -147,9 +147,9 @@ export default function GoalsPage() {
                 100
               );
               const isComplete = goal.current_amount >= goal.target_amount;
-              const daysLeft = goal.target_date
+              const daysLeft = goal.deadline
                 ? Math.ceil(
-                    (new Date(goal.target_date).getTime() - Date.now()) /
+                    (new Date(goal.deadline).getTime() - Date.now()) /
                       (1000 * 60 * 60 * 24)
                   )
                 : null;
@@ -161,10 +161,10 @@ export default function GoalsPage() {
                       <h3 className="text-base font-semibold text-slate-800">
                         {goal.name}
                       </h3>
-                      {goal.target_date && (
+                      {goal.deadline && (
                         <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-400">
                           <Calendar className="h-3.5 w-3.5" />
-                          {formatDate(goal.target_date)}
+                          {formatDate(goal.deadline)}
                           {daysLeft !== null && daysLeft >= 0 && (
                             <span className="text-slate-400">
                               · {daysLeft}d restantes

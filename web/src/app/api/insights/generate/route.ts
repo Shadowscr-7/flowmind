@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       .eq("user_id", user.id).gte("date", periodStart).lte("date", periodEnd).order("date", { ascending: false }).limit(200),
     supabase.from("accounts").select("name, type, balance, currency").eq("user_id", user.id).eq("is_active", true),
     supabase.from("budgets").select("limit_amount, currency, categories(name)").eq("user_id", user.id),
-    supabase.from("goals").select("name, target_amount, current_amount, currency, target_date").eq("user_id", user.id),
+    supabase.from("goals").select("name, target_amount, current_amount, currency, deadline").eq("user_id", user.id),
   ]);
 
   const currency = profile?.currency_default ?? "UYU";
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
   const goalStatus = (goals ?? []).map(g => ({
     name: g.name, target: Number(g.target_amount), current: Number(g.current_amount),
     pct: Math.round((Number(g.current_amount) / Number(g.target_amount)) * 100),
-    targetDate: g.target_date, currency: g.currency,
+    targetDate: g.deadline, currency: g.currency,
   }));
 
   // GPT analysis

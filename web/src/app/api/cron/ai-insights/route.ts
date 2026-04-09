@@ -69,7 +69,7 @@ async function buildUserContext(userId: string, currency: string) {
       .from("budgets")
       .select("limit_amount, currency, categories(name)")
       .eq("user_id", userId),
-    supabase.from("goals").select("name, target_amount, current_amount, currency, target_date").eq("user_id", userId),
+    supabase.from("goals").select("name, target_amount, current_amount, currency, deadline").eq("user_id", userId),
   ]);
 
   // Aggregate spending by category (last 30 days)
@@ -105,7 +105,7 @@ async function buildUserContext(userId: string, currency: string) {
     target: Number(g.target_amount),
     current: Number(g.current_amount),
     pct: Math.round((Number(g.current_amount) / Number(g.target_amount)) * 100),
-    targetDate: g.target_date,
+    targetDate: g.deadline,
     currency: g.currency,
   }));
 
