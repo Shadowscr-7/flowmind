@@ -111,6 +111,60 @@ export async function checkAiQuota(
   return { allowed: true, currentCount: profile.ai_usage_count };
 }
 
+export function proUpgradeUrl(): string {
+  const appUrl = Deno.env.get("APP_URL") ?? "https://app.flowmind.ai";
+  return `${appUrl}/register?plan=monthly`;
+}
+
+export async function checkMediaUsageLimit(
+  supabase: SupabaseClient,
+  userId: string,
+  kind: "audio" | "image",
+  channel = "mobile"
+): Promise<{ allowed: boolean; response?: Response }> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan")
+    .eq("id", userId)
+    .single();
+
+  if (profile?.plan === "pro") return { allowed: true };
+
+  const limit = kind === "audio" ? 2 : 3;
+  const label = kind === "audio" ? "audios" : "fotos";
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  const { count } = await supabase
+    .from("plan_usage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("kind", kind)
+    .gte("created_at", monthStart);
+
+  if ((count ?? 0) >= limit) {
+    return {
+      allowed: false,
+      response: jsonResponse({
+        success: false,
+        code: "FREE_PLAN_MEDIA_LIMIT",
+        limit,
+        kind,
+        upgrade_url: proUpgradeUrl(),
+        error: `Tu plan Free permite hasta ${limit} ${label} por mes y ya excediste el limite. Para seguir enviando, pasate a Pro mensual o anual.`,
+      }, 429),
+    };
+  }
+
+  await supabase.from("plan_usage_events").insert({
+    user_id: userId,
+    kind,
+    channel,
+  });
+
+  return { allowed: true };
+}
+
 /**
  * Increment AI usage counter after successful AI call
  */

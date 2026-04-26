@@ -4,6 +4,7 @@ import {
   callLLM,
   callWhisper,
   checkAiQuota,
+  checkMediaUsageLimit,
   incrementAiUsage,
   PARSE_TRANSACTION_PROMPT,
   jsonResponse,
@@ -26,6 +27,11 @@ serve(async (req: Request) => {
     } = await supabase.auth.getUser();
     if (authError || !user) {
       return errorResponse("Unauthorized", 401);
+    }
+
+    const mediaLimit = await checkMediaUsageLimit(supabase, user.id, "audio", "mobile");
+    if (!mediaLimit.allowed) {
+      return mediaLimit.response!;
     }
 
     // Check AI quota (voice uses 2 calls: Whisper + LLM)

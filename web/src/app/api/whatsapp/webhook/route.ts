@@ -8,6 +8,7 @@ const EVO_URL = process.env.EVOLUTION_API_URL!;
 const EVO_KEY = process.env.EVOLUTION_API_KEY!;
 const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE!;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "https://app.flowmind.ai";
+const PRO_UPGRADE_URL = `${APP_URL}/register?plan=monthly`;
 
 function db() {
   return createClient(SB_URL, SB_SERVICE_KEY);
@@ -652,6 +653,42 @@ export async function POST(req: NextRequest) {
       void supabase.from("profiles").update({ ai_usage_count: 0, ai_usage_reset_at: now.toISOString() }).eq("id", userId!);
     }
 
+    const isFreePlan = profile.plan !== "pro";
+    if (isFreePlan && (hasAudio || hasImage)) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const kind = hasAudio ? "audio" : "image";
+      const limit = hasAudio ? 2 : 3;
+      const label = hasAudio ? "audios" : "fotos de tickets";
+      const { count } = await supabase
+        .from("plan_usage_events")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("kind", kind)
+        .gte("created_at", monthStart);
+
+      if ((count ?? 0) >= limit) {
+        await supabase.from("whatsapp_pending").insert({
+          phone: rawPhone,
+          user_id: userId,
+          expires_at: pendingExpiry(),
+          pending_type: "upgrade_offer",
+          payload: { kind, limit, label },
+        });
+        await reply(
+          `Tu plan *Free* permite hasta *${limit} ${label} por mes* y ya excediste ese limite.\n\n` +
+          `Para seguir enviando, pasate a *FlowMind Pro* mensual o anual.\n\n` +
+          `Respondeme *si* y te paso el link de suscripcion, o entra directo aca:\n${PRO_UPGRADE_URL}`
+        );
+        return NextResponse.json({ received: true });
+      }
+
+      await supabase.from("plan_usage_events").insert({
+        user_id: userId,
+        kind,
+        channel: "whatsapp",
+      });
+    }
+
     // ── Check for active pending state ────────────────────────────────────────
     const { data: pending } = await supabase
       .from("whatsapp_pending")
@@ -663,6 +700,20 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (pending && textContent) {
+      if (pending.pending_type === "upgrade_offer") {
+        const answer = textContent.trim().toLowerCase();
+        if (["si", "sí", "ok", "dale", "quiero", "pro", "mensual", "anual"].some((w) => answer.includes(w))) {
+          await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+          await reply(
+            `Perfecto. Para activar *FlowMind Pro*, entra a este link y elegi mensual o anual:\n\n` +
+            `${PRO_UPGRADE_URL}\n\n` +
+            `Cuando completes el pago, tu cuenta queda como Pro y vas a poder seguir enviando audios y fotos.`
+          );
+          return NextResponse.json({ received: true });
+        }
+        await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+      }
+
       // ── Pending: account selection for transaction ──────────────────────────
       if (pending.pending_type === "account_selection") {
         const choice = parseInt(textContent.trim(), 10);
@@ -1226,6 +1277,13 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
     // ── QUERY ─────────────────────────────────────────────────────────────────
     if (intent.intent === "QUERY") {
+      if (isFreePlan) {
+        await reply(
+          `El plan Free no incluye analisis financiero con IA.\n\n` +
+          `Podes seguir registrando movimientos, y pasar a Pro cuando quieras desbloquear respuestas, insights y alertas inteligentes:\n${APP_URL}/register?plan=annual`
+        );
+        return NextResponse.json({ received: true });
+      }
       const ctx = await getUserContext(userId!, currency);
       const answer = await answerQuery(processedText, ctx, userName);
       await reply(answer, { intent: "QUERY" });
@@ -1235,6 +1293,13 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
     // ── MY_INSIGHTS ───────────────────────────────────────────────────────────
     if (intent.intent === "MY_INSIGHTS") {
+      if (isFreePlan) {
+        await reply(
+          `Los insights con IA son parte de FlowMind Pro.\n\n` +
+          `Free te deja probar el registro basico; Pro te muestra patrones, riesgos y oportunidades para ahorrar:\n${APP_URL}/register?plan=annual`
+        );
+        return NextResponse.json({ received: true });
+      }
       const { data: insights } = await supabase
         .from("ai_insights")
         .select("kind, title, detail, severity, created_at")

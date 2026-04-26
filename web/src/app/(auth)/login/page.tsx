@@ -56,7 +56,7 @@ export default function LoginPage() {
   }
 
   return (
-    <Card>
+    <Card className="border-white/10 shadow-2xl shadow-emerald-950/30">
       <h2 className="text-2xl font-bold text-slate-800 mb-1">Bienvenido</h2>
       <p className="text-slate-500 text-sm mb-6">
         Ingresa a tu cuenta para continuar
@@ -90,7 +90,7 @@ export default function LoginPage() {
         <Button
           type="submit"
           loading={loading}
-          className="w-full"
+          className="w-full bg-emerald-400 font-bold text-slate-950 hover:bg-emerald-300 disabled:bg-emerald-200"
           size="lg"
         >
           Ingresar
@@ -140,7 +140,7 @@ export default function LoginPage() {
         ¿No tenés cuenta?{" "}
         <Link
           href="/register"
-          className="text-indigo-600 font-medium hover:text-indigo-700"
+          className="font-medium text-emerald-700 hover:text-emerald-800"
         >
           Registrarse
         </Link>

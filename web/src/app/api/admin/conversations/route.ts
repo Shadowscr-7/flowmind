@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
         phone: msg.phone,
         user_id: msg.user_id ?? null,
         display_name: profile?.display_name ?? null,
-        plan: profile?.plan ?? null,
+        plan: profile?.plan ?? "free",
         last_message: msg.content,
         last_message_at: msg.created_at,
         last_direction: msg.direction,

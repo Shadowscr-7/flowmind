@@ -389,6 +389,7 @@ function AIForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: apiMode,
+          origin: inputMode,
           input: apiInput,
           type: txType,
           currency: selectedAccount?.currency ?? "UYU",
@@ -397,7 +398,10 @@ function AIForm({
       });
 
       const json = await res.json();
-      if (!res.ok || !json.draft) throw new Error(json.error ?? "Error al analizar");
+      if (!res.ok || !json.draft) {
+        const upgradeText = json.upgradeUrl ? ` Suscribite a Pro aca: ${json.upgradeUrl}` : "";
+        throw new Error(`${json.error ?? "Error al analizar"}${upgradeText}`);
+      }
 
       const d: TransactionDraft = {
         type: txType,

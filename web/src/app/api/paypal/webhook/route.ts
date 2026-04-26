@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
         const userId = await findUserBySubscription(subscriptionId);
         const newStatus = eventType.includes("CANCELLED") ? "cancelled" : "expired";
         if (userId) {
+          await supabase.from("profiles").update({ plan: "free" }).eq("id", userId);
           await supabase
             .from("subscriptions")
             .update({ status: newStatus })

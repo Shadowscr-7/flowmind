@@ -5,6 +5,7 @@ import {
   callLLM,
   callVisionOCR,
   checkAiQuota,
+  checkMediaUsageLimit,
   incrementAiUsage,
   PARSE_RECEIPT_PROMPT,
   jsonResponse,
@@ -88,6 +89,11 @@ serve(async (req: Request) => {
     } = await supabase.auth.getUser();
     if (authError || !user) {
       return errorResponse("Unauthorized", 401);
+    }
+
+    const mediaLimit = await checkMediaUsageLimit(supabase, user.id, "image", "mobile");
+    if (!mediaLimit.allowed) {
+      return mediaLimit.response!;
     }
 
     // Check AI quota (receipt uses 2 calls: Vision OCR + LLM)

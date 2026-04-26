@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       id: u.id,
       email: u.email ?? "",
       display_name: profile?.display_name ?? null,
-      plan: profile?.plan ?? "pro",
+      plan: profile?.plan ?? "free",
       ai_usage_count: profile?.ai_usage_count ?? 0,
       banned: !!u.banned_until,
       created_at: u.created_at,

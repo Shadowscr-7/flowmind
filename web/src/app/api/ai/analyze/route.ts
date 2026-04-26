@@ -6,6 +6,15 @@ const ALLOWED_TYPES = ["expense", "income", "transfer"] as const;
 const ALLOWED_CURRENCIES = ["UYU", "USD", "EUR", "ARS", "BRL"];
 const MAX_INPUT_LENGTH = 8000;
 
+function monthlyStartIso() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+}
+
+function upgradeUrl(req: NextRequest) {
+  return new URL("/register?plan=monthly", req.url).toString();
+}
+
 function buildSystemPrompt(type: string, categories: { id: string; name: string }[], currency: string): string {
   const typeLabel = type === "expense" ? "GASTO" : "INGRESO";
   const catList = categories
@@ -51,6 +60,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     mode: "text" | "image";
+    origin?: "text" | "image" | "audio";
     input: string;
     type: "expense" | "income" | "transfer";
     currency: string;
@@ -63,7 +73,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const { mode, input, type, currency = "UYU", categories = [] } = body;
+  const { mode, origin = mode, input, type, currency = "UYU", categories = [] } = body;
 
   if (!input || !type) {
     return NextResponse.json({ error: "Faltan parámetros: input, type" }, { status: 400 });
@@ -82,6 +92,43 @@ export async function POST(req: NextRequest) {
   }
   if (!Array.isArray(categories)) {
     return NextResponse.json({ error: "categories inválido" }, { status: 400 });
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.plan !== "pro" && (origin === "audio" || origin === "image")) {
+    const kind = origin === "audio" ? "audio" : "image";
+    const limit = origin === "audio" ? 2 : 3;
+    const label = origin === "audio" ? "audios" : "fotos";
+    const { count } = await supabase
+      .from("plan_usage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("kind", kind)
+      .gte("created_at", monthlyStartIso());
+
+    if ((count ?? 0) >= limit) {
+      return NextResponse.json(
+        {
+          code: "FREE_PLAN_MEDIA_LIMIT",
+          limit,
+          kind,
+          upgradeUrl: upgradeUrl(req),
+          error: `Tu plan Free permite hasta ${limit} ${label} por mes y ya excediste el limite. Para seguir enviando, pasate a Pro mensual o anual.`,
+        },
+        { status: 429 }
+      );
+    }
+
+    await supabase.from("plan_usage_events").insert({
+      user_id: user.id,
+      kind,
+      channel: "web",
+    });
   }
 
   const systemPrompt = buildSystemPrompt(type, categories, currency);
