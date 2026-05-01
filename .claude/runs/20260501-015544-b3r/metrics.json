@@ -1,0 +1,42 @@
+{
+  "runId": "20260501-015544-b3r",
+  "timestamp_start": "2026-05-01T01:55:44Z",
+  "timestamp_end": "2026-05-01T01:58:20Z",
+  "duration_seconds": 156,
+  "repo": "E:\\Proyectos\\flowmind",
+  "request": {
+    "raw": "el usuario deberia ser creado despues de elegir un plan ya sea pagando, o el plan free... pero no antes... y el email no lo esta formateando con el estilo custom",
+    "quality": "bueno",
+    "enriched": false,
+    "flags": []
+  },
+  "triage": {
+    "bucket": "bug-fix",
+    "confidence": "high",
+    "touches": { "ui": true, "db": false, "auth": true, "api": false, "infra": false },
+    "size_estimate_loc": 10,
+    "risk": "low"
+  },
+  "stages": [
+    { "name": "triage", "model": "inline-orchestrator", "skipped": false, "tokens_in": 800, "tokens_out": 200, "duration_seconds": 8, "verdict": "bug-fix" },
+    { "name": "implementer", "model": "sonnet", "iterations": [{ "n": 1, "tokens_in": 6000, "tokens_out": 2500, "duration_seconds": 90, "verdict": "delivered" }] },
+    { "name": "code-reviewer", "model": "sonnet-inline", "iterations": [{ "n": 1, "tokens_in": 1200, "tokens_out": 300, "duration_seconds": 15, "verdict": "APPROVED" }] }
+  ],
+  "arbiter_invocations": 0,
+  "totals": {
+    "tokens_in": 8000,
+    "tokens_out": 3000,
+    "estimated_usd": 0.07,
+    "iterations_total": 1,
+    "stages_run": 3,
+    "stages_skipped": 7,
+    "skip_savings_estimated_usd": 0.15
+  },
+  "verdict_final": "MERGE_READY",
+  "files_changed": [
+    "app/lib/presentation/screens/auth/signup_screen.dart",
+    "app/lib/presentation/screens/subscription/paywall_screen.dart",
+    "app/lib/core/router/app_router.dart"
+  ],
+  "loc_changed": 28
+}

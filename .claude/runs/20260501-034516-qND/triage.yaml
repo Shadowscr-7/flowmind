@@ -1,0 +1,25 @@
+bucket: small-feature
+confidence: high
+clarifying_questions: []
+multi_intent: false
+touches:
+  ui: true
+  db: false
+  auth: false
+  api: false
+  infra: false
+size_estimate_loc: 110
+risk: low
+recommended_agents:
+  analyst: sonnet
+  architect: sonnet
+  implementer: sonnet
+  code-reviewer: sonnet
+  qa-tester: sonnet
+  ux-validator: sonnet
+notes: >
+  Feature UI pura. El campo whatsapp_phone ya existe en la DB (via migration en schema.sql)
+  pero no en el modelo Profile de Flutter. Requiere: (1) agregar whatsappPhone al modelo
+  y archivos freezed/g, (2) nuevo widget banner en home_screen.dart _HomeTab,
+  (3) tile en settings para editar el phone. No hay lógica de "root" en el app;
+  la condicion es simplemente profile.whatsappPhone == null.

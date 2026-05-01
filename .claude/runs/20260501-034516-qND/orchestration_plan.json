@@ -1,0 +1,21 @@
+{
+  "runId": "20260501-034516-qND",
+  "bucket": "small-feature",
+  "stages": ["analyst-inline", "implementer", "code-reviewer", "qa-tester", "ux-validator"],
+  "implementer_model_chosen": "sonnet",
+  "implementer_model_triage_recommended": "sonnet",
+  "parallel_review_qa": false,
+  "parallel_review_qa_reason": "no metrics from previous runs — assuming tests > 60s",
+  "skips": [
+    { "stage": "analyst", "reason": "inline spec written by orchestrator — size < 200 LOC, straightforward UI feature" },
+    { "stage": "architect", "reason": "plan is trivial — 3 files, no new dependencies, no architecture decisions" },
+    { "stage": "security-reviewer", "reason": "bucket != large-feature and no auth/db/api touches" },
+    { "stage": "dependency-reviewer", "reason": "diff does not touch pubspec.yaml or lock files" },
+    { "stage": "documenter", "reason": "bucket != large-feature and diff < 30 LOC threshold does not apply, but --no-docs default for small-feature" }
+  ],
+  "budget_estimate_usd": 0.15,
+  "escalation_conditions": {
+    "max_iterations": 3,
+    "escalate_to_arbiter_on": "3_failed_iterations OR contradictory_verdicts"
+  }
+}

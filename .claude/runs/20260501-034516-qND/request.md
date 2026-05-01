@@ -1,0 +1,1 @@
+﻿quiero que si no tiene puesto celular en configuracion el usuario que no es root... deberia en el dashboard poner una seccion con un icono de ! diciendo que se recomienda colocar numero de telefono para poder utilizar el asistente de whatsapp... en el proyecto flowmind e:\proyectos\flowmind

@@ -1,0 +1,29 @@
+{
+  "runId": "20260501-015544-b3r",
+  "state": "completed",
+  "current_stage": "done",
+  "current_iteration": 1,
+  "current_intent": null,
+  "started_at": "2026-05-01T01:55:44Z",
+  "updated_at": "2026-05-01T01:58:10Z",
+  "completed_stages": [
+    { "name": "triage", "verdict": "bug-fix", "duration_seconds": 8 },
+    { "name": "implementer", "verdict": "delivered", "duration_seconds": 90 },
+    { "name": "code-reviewer", "verdict": "APPROVED", "duration_seconds": 15 }
+  ],
+  "stages_planned": ["triage", "implementer", "code-reviewer"],
+  "stages_skipped": [
+    { "name": "analyst", "reason": "bucket=bug-fix, mini-spec inline" },
+    { "name": "architect", "reason": "bucket=bug-fix" },
+    { "name": "qa-tester", "reason": "flutter app, no automated test infra detected" },
+    { "name": "ux-validator", "reason": "routing change, no visual design change" },
+    { "name": "security-reviewer", "reason": "bucket!=large-feature" },
+    { "name": "dependency-reviewer", "reason": "no dependency file changes" },
+    { "name": "documenter", "reason": "bucket=bug-fix" }
+  ],
+  "estimated_cost_so_far_usd": 0.04,
+  "verdict_final": "MERGE_READY",
+  "multi_intent": false,
+  "intents_progress": [],
+  "arbiter_invocations": 0
+}

@@ -18,9 +18,22 @@ api_url = "http://127.0.0.1"
 [auth]
 enabled = true
 site_url = "https://flowmind.aivanguardlabs.com"
-additional_redirect_urls = ["https://flowmind.aivanguardlabs.com", "http://localhost:3000"]
+additional_redirect_urls = [
+  "https://flowmind.aivanguardlabs.com",
+  "https://flowmind.aivanguardlabs.com/dashboard",
+  "https://flowmind.aivanguardlabs.com/register",
+  "http://localhost:3000",
+  "http://localhost:3000/dashboard",
+  "http://localhost:3000/register"
+]
 jwt_expiry = 3600
 enable_signup = true
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_SECRET)"
+redirect_uri = ""
 
 [auth.email]
 enable_signup = true

@@ -1,0 +1,24 @@
+bucket: bug-fix
+confidence: high
+multi_intent: false
+touches:
+  ui: true
+  db: false
+  auth: true
+  api: false
+  infra: false
+size_estimate_loc: 10
+risk: low
+recommended_models:
+  implementer: haiku
+clarifying_questions: []
+notes: >
+  Dos problemas reportados:
+  1) Email template default de Supabase — el template custom YA existe en el repo
+     (backend/supabase/email-templates/confirm-signup.html) y config.toml lo referencia.
+     El problema es que para proyecto HOSTEADO hay que pegarlo manualmente en el
+     Dashboard de Supabase. No requiere cambio de código — es accion manual del developer.
+  2) Usuario se crea antes de elegir plan — en signup_screen.dart el flujo post-signup
+     navega a AppRouter.onboarding directamente, debería ir a AppRouter.paywall primero.
+     Fix puntual: cambiar Navigator.pushReplacementNamed destino.
+  Bucket=bug-fix. Issue 1 es advisory + accion manual. Issue 2 es code fix ~5 LOC.
