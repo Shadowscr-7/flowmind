@@ -1,0 +1,17 @@
+{
+  "runId": "20260501-063036-Aql",
+  "bucket": "bug-fix",
+  "bucket_source": "forced via --bucket=bug-fix flag",
+  "stages": ["implementer", "code-reviewer", "qa-tester"],
+  "stages_skipped": ["analyst", "architect", "ux-validator", "security-reviewer", "dependency-reviewer", "documenter"],
+  "implementer_model_chosen": "sonnet",
+  "implementer_model_triage_recommended": "sonnet",
+  "deviation_reason": "Two bugs with logic analysis required (LOC > 50 equivalent reasoning), using sonnet per bucket=bug-fix with dense logic rule",
+  "parallel_review_qa": false,
+  "reason": "No prior test metrics for this repo, cannot confirm suite < 60s",
+  "estimated_budget_usd": 0.15,
+  "max_iterations": 3,
+  "escalation_to_opus": "disabled (Pro plan)",
+  "multi_intent": false,
+  "notes": "Two bugs in same file — treating as single intent (same file, same function area). No lessons.db.yaml yet, using fallback lessons from last 3 runs."
+}

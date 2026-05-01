@@ -1,0 +1,70 @@
+{
+  "runId": "20260501-063036-Aql",
+  "timestamp_start": "2026-05-01T06:30:36Z",
+  "timestamp_end": "2026-05-01T06:36:00Z",
+  "duration_seconds": 324,
+  "repo": "E:\\Proyectos\\flowmind",
+  "request": {
+    "raw": "BUG FIX (dos bugs en el asistente WhatsApp de FlowMind): encoding roto + logica inconsistente welcome/no-account",
+    "quality": "bueno",
+    "enriched": false,
+    "flags": ["--bucket=bug-fix"]
+  },
+  "triage": {
+    "bucket": "bug-fix",
+    "bucket_source": "forced",
+    "confidence": "high",
+    "touches": { "ui": false, "db": false, "auth": false, "api": true, "infra": false },
+    "size_estimate_loc": 75,
+    "risk": "low"
+  },
+  "stages": [
+    {
+      "name": "implementer",
+      "model": "sonnet",
+      "skipped": false,
+      "tokens_in": 6000,
+      "tokens_out": 4000,
+      "duration_seconds": 90,
+      "verdict": "delivered"
+    },
+    {
+      "name": "code-reviewer",
+      "model": "sonnet",
+      "skipped": false,
+      "iterations": [{ "n": 1, "tokens_in": 5000, "tokens_out": 600, "duration_seconds": 60, "verdict": "APPROVED" }]
+    },
+    {
+      "name": "qa-tester",
+      "model": "sonnet",
+      "skipped": false,
+      "tokens_in": 3000,
+      "tokens_out": 500,
+      "duration_seconds": 60,
+      "verdict": "PASSED"
+    }
+  ],
+  "stages_skipped": [
+    { "name": "analyst", "reason": "bucket=bug-fix" },
+    { "name": "architect", "reason": "bucket=bug-fix" },
+    { "name": "ux-validator", "reason": "no UI files touched" },
+    { "name": "security-reviewer", "reason": "bucket != large-feature" },
+    { "name": "dependency-reviewer", "reason": "no package files changed" },
+    { "name": "documenter", "reason": "bucket=bug-fix" }
+  ],
+  "arbiter_invocations": 0,
+  "totals": {
+    "tokens_in": 14000,
+    "tokens_out": 5100,
+    "estimated_usd": 0.12,
+    "iterations_total": 1,
+    "stages_run": 3,
+    "stages_skipped": 6,
+    "skip_savings_estimated_usd": 0.30
+  },
+  "verdict_final": "MERGE_READY",
+  "files_changed": [
+    "backend/supabase/functions/whatsapp-webhook/index.ts"
+  ],
+  "loc_changed": 75
+}

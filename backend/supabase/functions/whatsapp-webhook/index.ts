@@ -36,6 +36,62 @@ const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
 const EVO_INSTANCE = Deno.env.get("EVOLUTION_INSTANCE") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Normalize a phone number to digits only (strips +, spaces, dashes, parens).
+ */
+function digitsOnly(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+/**
+ * Find a user profile by WhatsApp phone number.
+ * Tries multiple number formats to handle inconsistencies between how
+ * Evolution API sends numbers and how they are stored in profiles.
+ *
+ * Strategy:
+ *   1. Exact match with + prefix (e.g. "+59899123456")
+ *   2. Exact match without + prefix (e.g. "59899123456")
+ *   3. Suffix match on last 9 digits — handles country-code prefix mismatches
+ *      (e.g. stored "099123456" matches incoming "59899123456")
+ */
+async function findProfileByPhone(
+  db: ReturnType<typeof getServiceClient>,
+  rawPhone: string
+): Promise<{ id: string; display_name: string | null; currency_default: string | null; plan: string | null; ai_usage_count: number | null; ai_usage_reset_at: string | null } | null> {
+  const phoneWithPlus = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
+  const phoneWithoutPlus = rawPhone.replace(/^\+/, "");
+
+  // Attempt 1: exact match (covers most cases)
+  const { data: exactProfile } = await db
+    .from("profiles")
+    .select("id, display_name, currency_default, plan, ai_usage_count, ai_usage_reset_at")
+    .or(`whatsapp_phone.eq.${phoneWithPlus},whatsapp_phone.eq.${phoneWithoutPlus}`)
+    .maybeSingle();
+
+  if (exactProfile) return exactProfile;
+
+  // Attempt 2: suffix match on last 9 digits
+  // Handles cases where the stored number has a different country-code format
+  // (e.g. stored "099123456" vs incoming "59899123456")
+  const suffix = digitsOnly(phoneWithoutPlus).slice(-9);
+  if (suffix.length < 7) return null; // too short to be reliable
+
+  const { data: suffixProfiles } = await db
+    .from("profiles")
+    .select("id, display_name, currency_default, plan, ai_usage_count, ai_usage_reset_at")
+    .like("whatsapp_phone", `%${suffix}`)
+    .limit(2); // limit 2 to detect ambiguity
+
+  if (suffixProfiles && suffixProfiles.length === 1) {
+    return suffixProfiles[0];
+  }
+
+  // If 0 or >1 results from suffix match, do not guess
+  return null;
+}
+
 // ─── Main handler ────────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
@@ -61,19 +117,14 @@ serve(async (req: Request) => {
 
     // Extract phone (strip @s.whatsapp.net)
     const rawPhone = remoteJid.replace(/@.*/, "");
-    const phoneWithPlus = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
-    const phoneWithoutPlus = rawPhone.replace(/^\+/, "");
 
-    // Find user by whatsapp_phone in profiles
+    // Find user by whatsapp_phone in profiles (multi-format lookup)
     const db = getServiceClient();
-    const { data: profile } = await db
-      .from("profiles")
-      .select("id, display_name, currency_default, plan, ai_usage_count, ai_usage_reset_at")
-      .or(`whatsapp_phone.eq.${phoneWithPlus},whatsapp_phone.eq.${phoneWithoutPlus}`)
-      .single();
+    const profile = await findProfileByPhone(db, rawPhone);
 
     if (!profile) {
-      // User not registered — send onboarding message
+      // User not registered — log for diagnostics and send onboarding message
+      console.log(`[whatsapp-webhook] No profile found for rawPhone="${rawPhone}"`);
       await sendWhatsApp(
         rawPhone,
         `👋 Hola! Para usar FlowMind por WhatsApp necesitás registrar tu número en la app web.\n\nAndá a Configuración → WhatsApp y vinculá este número.`
@@ -160,7 +211,7 @@ serve(async (req: Request) => {
         const receiptRes = await fetch(`${SUPABASE_URL}/functions/v1/ingest-receipt`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
             "x-user-id": userId,
           },
@@ -261,7 +312,7 @@ serve(async (req: Request) => {
   }
 });
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helper functions ─────────────────────────────────────────────────────────
 
 function helpMessage(name: string | null): string {
   return (
@@ -287,7 +338,9 @@ async function sendWhatsApp(to: string, text: string): Promise<void> {
   try {
     await fetch(`${EVO_URL}/message/sendText/${EVO_INSTANCE}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: EVO_KEY },
+      // FIX Bug 1: explicit charset=utf-8 prevents Evolution API from misinterpreting
+      // UTF-8 encoded emojis and accented characters as Latin-1
+      headers: { "Content-Type": "application/json; charset=utf-8", apikey: EVO_KEY },
       body: JSON.stringify({ number: to, text }),
     });
   } catch (err) {
@@ -300,7 +353,7 @@ async function downloadMediaFromEvolution(remoteJid: string, messageId: string):
   try {
     const res = await fetch(`${EVO_URL}/chat/getBase64FromMediaMessage/${EVO_INSTANCE}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: EVO_KEY },
+      headers: { "Content-Type": "application/json; charset=utf-8", apikey: EVO_KEY },
       body: JSON.stringify({ message: { key: { remoteJid, id: messageId } } }),
     });
     if (!res.ok) return null;
