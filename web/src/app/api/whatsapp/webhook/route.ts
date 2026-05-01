@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -14,7 +14,7 @@ function db() {
   return createClient(SB_URL, SB_SERVICE_KEY);
 }
 
-// ─── Log WhatsApp message ─────────────────────────────────────────────────────
+// â”€â”€â”€ Log WhatsApp message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function logMsg(params: {
   userId?: string | null;
   phone: string;
@@ -39,7 +39,7 @@ async function logMsg(params: {
   }
 }
 
-// ─── Send WhatsApp message ────────────────────────────────────────────────────
+// â”€â”€â”€ Send WhatsApp message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function sendWA(to: string, text: string) {
   if (!EVO_URL || !EVO_KEY || !EVO_INSTANCE) return;
   try {
@@ -53,7 +53,7 @@ async function sendWA(to: string, text: string) {
   }
 }
 
-// ─── Download media from Evolution as base64 ─────────────────────────────────
+// â”€â”€â”€ Download media from Evolution as base64 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function downloadMedia(remoteJid: string, messageId: string): Promise<string | null> {
   try {
     const res = await fetch(`${EVO_URL}/chat/getBase64FromMediaMessage/${EVO_INSTANCE}`, {
@@ -69,7 +69,7 @@ async function downloadMedia(remoteJid: string, messageId: string): Promise<stri
   }
 }
 
-// ─── OpenAI helpers ───────────────────────────────────────────────────────────
+// â”€â”€â”€ OpenAI helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function gpt(system: string, user: string | object[], model = "gpt-4o-mini"): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -105,7 +105,7 @@ async function whisper(audioBase64: string): Promise<string> {
   return (await res.json()).text ?? "";
 }
 
-// ─── Intent classification ────────────────────────────────────────────────────
+// â”€â”€â”€ Intent classification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface RecentTx {
   id: string;
   type: string;
@@ -122,6 +122,13 @@ interface AccountInfo {
   type: string;
   balance: number;
   currency: string;
+}
+
+interface ConversationLine {
+  direction: "inbound" | "outbound";
+  content: string | null;
+  intent: string | null;
+  created_at: string;
 }
 
 interface IntentResult {
@@ -179,14 +186,15 @@ async function classifyMessage(
   text: string,
   currency: string,
   recentTxs: RecentTx[] = [],
-  userAccounts: AccountInfo[] = []
+  userAccounts: AccountInfo[] = [],
+  conversationMemory = ""
 ): Promise<IntentResult> {
   const today = new Date().toISOString().split("T")[0];
 
   const recentContext = recentTxs.length > 0
-    ? `\nÚLTIMOS MOVIMIENTOS:\n` + recentTxs.map((t, i) =>
+    ? `\nÃšLTIMOS MOVIMIENTOS:\n` + recentTxs.map((t, i) =>
         `  ${i + 1}. ${t.type === "income" ? "Ingreso" : "Gasto"} ${t.currency} ${t.amount}` +
-        `${t.merchant ? ` (${t.merchant})` : ""} — cuenta: ${t.account_name ?? "?"}, fecha: ${t.date}`
+        `${t.merchant ? ` (${t.merchant})` : ""} â€” cuenta: ${t.account_name ?? "?"}, fecha: ${t.date}`
       ).join("\n")
     : "";
 
@@ -194,15 +202,16 @@ async function classifyMessage(
     ? `\nCUENTAS DEL USUARIO:\n` + userAccounts.map(a =>
         `  - ${a.name} (${a.type}, saldo: ${a.currency} ${a.balance})`
       ).join("\n")
-    : "\nEl usuario NO tiene cuentas configuradas aún.";
+    : "\nEl usuario NO tiene cuentas configuradas aÃºn.";
 
-  const system = `Eres FlowMind AI, asistente financiero personal. Procesás mensajes de WhatsApp en español rioplatense.
+  const system = `Eres FlowMind AI, asistente financiero personal. ProcesÃ¡s mensajes de WhatsApp en espaÃ±ol rioplatense.
 Fecha hoy: ${today}. Moneda por defecto del usuario: ${currency}.
 ${recentContext}
 ${accountsContext}
+${conversationMemory ? `\nMEMORIA RECIENTE DE LA CONVERSACION:\n${conversationMemory}` : ""}
 
-Analizá el INTENTO REAL del usuario aunque use lenguaje coloquial, indirecto o impreciso.
-Respondé ÚNICAMENTE con JSON válido (sin texto extra, sin markdown):
+AnalizÃ¡ el INTENTO REAL del usuario aunque use lenguaje coloquial, indirecto o impreciso.
+RespondÃ© ÃšNICAMENTE con JSON vÃ¡lido (sin texto extra, sin markdown):
 
 {
   "intent": "TRANSACTION" | "QUERY" | "HELP" | "CORRECTION" | "ACCOUNT_CREATION" | "TRANSFER" | "MY_INSIGHTS" | "ALERT_SETUP" | "SAVINGS_PLAN",
@@ -216,84 +225,84 @@ Respondé ÚNICAMENTE con JSON válido (sin texto extra, sin markdown):
   "support_ticket": { "subject": string|null, "message": string|null, "priority": "normal"|"high"|"urgent"|null } | null
 }
 
-── INTENTS ──────────────────────────────────────────────────────────────────
+â”€â”€ INTENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-TRANSACTION — movimiento que sale o entra del patrimonio total del usuario.
+TRANSACTION â€” movimiento que sale o entra del patrimonio total del usuario.
   expense: dinero que sale hacia afuera (comercios, personas, servicios)
-    "gasté 500 en el super" → expense 500
-    "pagué el alquiler 15000" → expense 15000
-    "le mandé 3000 a Juan" → expense 3000 (pago a otra persona = sale del patrimonio)
-    "le pagué a María 800" → expense 800
-    "almorcé y pagué 350" → expense 350
+    "gastÃ© 500 en el super" â†’ expense 500
+    "paguÃ© el alquiler 15000" â†’ expense 15000
+    "le mandÃ© 3000 a Juan" â†’ expense 3000 (pago a otra persona = sale del patrimonio)
+    "le paguÃ© a MarÃ­a 800" â†’ expense 800
+    "almorcÃ© y paguÃ© 350" â†’ expense 350
   income: dinero que entra desde afuera
-    "cobré el sueldo 45000" → income 45000
-    "me pagaron 8000 por un trabajo" → income 8000
+    "cobrÃ© el sueldo 45000" â†’ income 45000
+    "me pagaron 8000 por un trabajo" â†’ income 8000
 
-TRANSFER — dinero que se mueve entre cuentas PROPIAS del usuario (el total no cambia).
+TRANSFER â€” dinero que se mueve entre cuentas PROPIAS del usuario (el total no cambia).
   from_account: cuenta de origen (nombre o null si no especificado)
   to_account: cuenta destino (nombre o null si no especificado)
   Ejemplos:
-    "pasé 5000 del banco al efectivo" → from: "banco", to: "efectivo"
-    "moví 10000 de ahorro a corriente" → from: "ahorro", to: "corriente"
-    "saqué 10000 del cajero" → retiro = from: banco/cuenta bancaria, to: efectivo
-    "retiré plata del BROU" → from: "BROU", to: efectivo (null si no especifica destino)
-    "transferí 20000 a mi cuenta Santander" → from: null (no especifica origen), to: "Santander"
-    "moví plata entre cuentas" → from: null, to: null (preguntar ambos)
-  IMPORTANTE: Si el usuario dice "transferí a [nombre de persona]" → es TRANSACTION expense, NO transfer.
+    "pasÃ© 5000 del banco al efectivo" â†’ from: "banco", to: "efectivo"
+    "movÃ­ 10000 de ahorro a corriente" â†’ from: "ahorro", to: "corriente"
+    "saquÃ© 10000 del cajero" â†’ retiro = from: banco/cuenta bancaria, to: efectivo
+    "retirÃ© plata del BROU" â†’ from: "BROU", to: efectivo (null si no especifica destino)
+    "transferÃ­ 20000 a mi cuenta Santander" â†’ from: null (no especifica origen), to: "Santander"
+    "movÃ­ plata entre cuentas" â†’ from: null, to: null (preguntar ambos)
+  IMPORTANTE: Si el usuario dice "transferÃ­ a [nombre de persona]" â†’ es TRANSACTION expense, NO transfer.
   IMPORTANTE: Un retiro del cajero siempre es TRANSFER (de cuenta bancaria a efectivo).
 
-QUERY — consultas sobre finanzas.
-  "cuánto gasté?" → monthly_summary
-  "cómo estoy?" → general
-  "cuál es mi saldo?" → balance
-  "en qué gasté más?" → category_breakdown
-  "mostrá los últimos movimientos" → recent
+QUERY â€” consultas sobre finanzas.
+  "cuÃ¡nto gastÃ©?" â†’ monthly_summary
+  "cÃ³mo estoy?" â†’ general
+  "cuÃ¡l es mi saldo?" â†’ balance
+  "en quÃ© gastÃ© mÃ¡s?" â†’ category_breakdown
+  "mostrÃ¡ los Ãºltimos movimientos" â†’ recent
 
-CORRECTION — corregir algo ya registrado.
-  "eso no era del efectivo, es de Santander" → change_account "Santander"
-  "ese ingreso ponelo en el Itaú" → change_account "Itaú"
-  "me equivoqué de cuenta" → change_account (account_name: null)
-  "borrá el último" → delete
-  "el monto era 800 no 500" → change_amount 800
-  "no es Santandiar, es Santander" → rename_account, new_name: "Santander"
+CORRECTION â€” corregir algo ya registrado.
+  "eso no era del efectivo, es de Santander" â†’ change_account "Santander"
+  "ese ingreso ponelo en el ItaÃº" â†’ change_account "ItaÃº"
+  "me equivoquÃ© de cuenta" â†’ change_account (account_name: null)
+  "borrÃ¡ el Ãºltimo" â†’ delete
+  "el monto era 800 no 500" â†’ change_amount 800
+  "no es Santandiar, es Santander" â†’ rename_account, new_name: "Santander"
 
-ACCOUNT_CREATION — crear o agregar una cuenta propia.
-  "quiero crear una cuenta en Santander" → name: "Santander", type: "bank"
-  "agregar mi cuenta BROU" → name: "BROU", type: "bank"
-  "quiero agregar mi efectivo" → name: "Efectivo", type: "cash"
-  "tengo una caja de ahorro en Itaú" → name: "Itaú", type: "savings"
+ACCOUNT_CREATION â€” crear o agregar una cuenta propia.
+  "quiero crear una cuenta en Santander" â†’ name: "Santander", type: "bank"
+  "agregar mi cuenta BROU" â†’ name: "BROU", type: "bank"
+  "quiero agregar mi efectivo" â†’ name: "Efectivo", type: "cash"
+  "tengo una caja de ahorro en ItaÃº" â†’ name: "ItaÃº", type: "savings"
 
-MY_INSIGHTS — pedir análisis o insights de sus finanzas.
-  "¿cómo voy financieramente?" / "dame un análisis" / "qué insights tengo" / "resumen financiero"
-  "¿cómo estoy?" cuando el contexto es análisis/sugerencias, no solo saldo
+MY_INSIGHTS â€” pedir anÃ¡lisis o insights de sus finanzas.
+  "Â¿cÃ³mo voy financieramente?" / "dame un anÃ¡lisis" / "quÃ© insights tengo" / "resumen financiero"
+  "Â¿cÃ³mo estoy?" cuando el contexto es anÃ¡lisis/sugerencias, no solo saldo
 
-ALERT_SETUP — configurar una alerta automática de gasto, saldo o meta.
-  "avisame si gasto más de 10000 en comida por mes" → type: spending_limit, amount: 10000, period: monthly, category: "comida"
-  "alertame si mi saldo baja de 5000" → type: low_balance, amount: 5000
-  "quiero un resumen semanal" → type: weekly_summary
-  "notificame si alcanzo el 50% de alguna meta" → type: goal_milestone, amount: 50
-  "quiero alerta de gasto inusual" → type: unusual_spending
+ALERT_SETUP â€” configurar una alerta automÃ¡tica de gasto, saldo o meta.
+  "avisame si gasto mÃ¡s de 10000 en comida por mes" â†’ type: spending_limit, amount: 10000, period: monthly, category: "comida"
+  "alertame si mi saldo baja de 5000" â†’ type: low_balance, amount: 5000
+  "quiero un resumen semanal" â†’ type: weekly_summary
+  "notificame si alcanzo el 50% de alguna meta" â†’ type: goal_milestone, amount: 50
+  "quiero alerta de gasto inusual" â†’ type: unusual_spending
 
-SAVINGS_PLAN — crear una meta o plan de ahorro.
-  "quiero ahorrar 50000 para vacaciones en diciembre" → name: "Vacaciones", target: 50000, date: 2026-12-01
-  "crear meta de ahorro para auto, 200000 USD" → name: "Auto", target: 200000, currency: "USD"
-  "quiero armar un plan de ahorro" → name: null, target: null (se pedirá más info)
+SAVINGS_PLAN â€” crear una meta o plan de ahorro.
+  "quiero ahorrar 50000 para vacaciones en diciembre" â†’ name: "Vacaciones", target: 50000, date: 2026-12-01
+  "crear meta de ahorro para auto, 200000 USD" â†’ name: "Auto", target: 200000, currency: "USD"
+  "quiero armar un plan de ahorro" â†’ name: null, target: null (se pedirÃ¡ mÃ¡s info)
 
-SUPPORT_TICKET — reclamos, quejas, reportes de problemas, pedidos de ayuda técnica.
-  "quiero hacer un reclamo" → subject: "Reclamo", message: null
-  "tengo un problema con el bot" → subject: "Problema con el bot", message: "..."
-  "no me funciona tal cosa" → subject: inferred, message: detail
-  "quiero reportar un error" → subject: "Reporte de error", message: "..."
+SUPPORT_TICKET â€” reclamos, quejas, reportes de problemas, pedidos de ayuda tÃ©cnica.
+  "quiero hacer un reclamo" â†’ subject: "Reclamo", message: null
+  "tengo un problema con el bot" â†’ subject: "Problema con el bot", message: "..."
+  "no me funciona tal cosa" â†’ subject: inferred, message: detail
+  "quiero reportar un error" â†’ subject: "Reporte de error", message: "..."
   priority: urgent si dice "urgente"/"no puedo usar nada", high si hay molestia clara, normal por defecto
 
-HELP — saludos, preguntas de uso, contenido no relacionado.
+HELP â€” saludos, preguntas de uso, contenido no relacionado.
 
-── REGLAS DE DESEMPATE ──────────────────────────────────────────────────────
-- "transferí a [persona]" → TRANSACTION expense (no TRANSFER)
-- "saqué del cajero" / "retiré del banco" → TRANSFER
-- "pasé/moví plata entre cuentas" → TRANSFER
-- Si menciona dos cuentas propias → TRANSFER
-- Si menciona un comercio o persona externa → TRANSACTION`;
+â”€â”€ REGLAS DE DESEMPATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+- "transferÃ­ a [persona]" â†’ TRANSACTION expense (no TRANSFER)
+- "saquÃ© del cajero" / "retirÃ© del banco" â†’ TRANSFER
+- "pasÃ©/movÃ­ plata entre cuentas" â†’ TRANSFER
+- Si menciona dos cuentas propias â†’ TRANSFER
+- Si menciona un comercio o persona externa â†’ TRANSACTION`;
 
   const raw = await gpt(system, text, "gpt-4o");
   const match = raw.match(/\{[\s\S]*\}/);
@@ -306,7 +315,7 @@ HELP — saludos, preguntas de uso, contenido no relacionado.
   }
 }
 
-// ─── Fetch user financial context ─────────────────────────────────────────────
+// â”€â”€â”€ Fetch user financial context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function getUserContext(userId: string, currency: string) {
   const supabase = db();
   const now = new Date();
@@ -330,7 +339,7 @@ async function getUserContext(userId: string, currency: string) {
   const catMap: Record<string, number> = {};
   for (const t of monthTxs ?? []) {
     if (t.type === "expense") {
-      const name = (t.categories as unknown as { name: string } | null)?.name ?? "Sin categoría";
+      const name = (t.categories as unknown as { name: string } | null)?.name ?? "Sin categorÃ­a";
       catMap[name] = (catMap[name] ?? 0) + t.amount;
     }
   }
@@ -345,22 +354,22 @@ async function getUserContext(userId: string, currency: string) {
 
   const budgetStr = (budgets ?? []).map((b) => {
     const cat = (b.categories as unknown as { name: string } | null)?.name ?? "Sin cat";
-    return `${cat}: límite ${b.currency} ${b.amount}`;
+    return `${cat}: lÃ­mite ${b.currency} ${b.amount}`;
   }).join(", ");
 
   return {
     balanceLine: `Balance total: ${currency} ${totalBalance.toFixed(2)} (${(accounts ?? []).map((a) => `${a.name}: ${a.currency} ${a.balance}`).join(", ")})`,
-    monthLine: `Este mes — Ingresos: ${currency} ${monthIncome.toFixed(2)} | Gastos: ${currency} ${monthExpense.toFixed(2)} | Neto: ${currency} ${(monthIncome - monthExpense).toFixed(2)}`,
-    topCatsLine: `Top categorías de gasto: ${topCats || "sin datos"}`,
-    recentLine: `Últimas transacciones:\n${recentStr || "ninguna"}`,
+    monthLine: `Este mes â€” Ingresos: ${currency} ${monthIncome.toFixed(2)} | Gastos: ${currency} ${monthExpense.toFixed(2)} | Neto: ${currency} ${(monthIncome - monthExpense).toFixed(2)}`,
+    topCatsLine: `Top categorÃ­as de gasto: ${topCats || "sin datos"}`,
+    recentLine: `Ãšltimas transacciones:\n${recentStr || "ninguna"}`,
     budgetLine: `Presupuestos: ${budgetStr || "no configurados"}`,
   };
 }
 
 async function answerQuery(question: string, ctx: Awaited<ReturnType<typeof getUserContext>>, userName: string) {
   const system = `Sos FlowMind AI, asistente financiero personal de ${userName}.
-Respondé de forma amigable y concisa (máx 200 palabras) en español usando los datos del usuario.
-Usá emojis moderadamente. Formato WhatsApp (negrita con *, listas con -).
+RespondÃ© de forma amigable y concisa (mÃ¡x 200 palabras) en espaÃ±ol usando los datos del usuario.
+UsÃ¡ emojis moderadamente. Formato WhatsApp (negrita con *, listas con -).
 
 DATOS DEL USUARIO:
 ${ctx.balanceLine}
@@ -371,7 +380,72 @@ ${ctx.budgetLine}`;
   return await gpt(system, question);
 }
 
-// ─── Resolve category ID ──────────────────────────────────────────────────────
+async function getConversationMemory(phone: string, userId: string | null): Promise<string> {
+  const { data } = await db()
+    .from("whatsapp_messages")
+    .select("direction, content, intent, created_at")
+    .eq("phone", phone)
+    .or(`user_id.eq.${userId},user_id.is.null`)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  const rows = ((data ?? []) as ConversationLine[]).reverse();
+  return rows
+    .filter((m) => m.content?.trim())
+    .map((m) => {
+      const who = m.direction === "inbound" ? "Usuario" : "FlowMind";
+      const intent = m.intent ? ` [${m.intent}]` : "";
+      return `${who}${intent}: ${m.content!.slice(0, 500)}`;
+    })
+    .join("\n");
+}
+
+async function businessReply(userName: string, text: string, memory: string) {
+  return await gpt(
+    `Sos FlowMind AI, asistente financiero personal de ${userName} por WhatsApp.
+Tu personalidad: humana, clara, rioplatense, breve y util. Maximo 4 lineas.
+Alcance: solo finanzas personales, registro de gastos/ingresos, cuentas, presupuestos, metas, alertas, suscripcion y uso de FlowMind.
+Si preguntan algo fuera de ese alcance, respondÃ© amable que no podÃ©s ayudar con eso y redirigÃ­ a algo financiero concreto.
+No inventes datos. No digas que sos un humano. No uses tono robotico.
+
+Memoria reciente:
+${memory || "Sin memoria reciente."}`,
+    text,
+    "gpt-4o-mini"
+  );
+}
+
+async function extractInitialAccountSetup(text: string, currency: string) {
+  const raw = await gpt(
+    `Extrae datos para crear la primera cuenta financiera de un usuario.
+Moneda por defecto: ${currency}.
+RespondÃ© SOLO JSON:
+{
+  "name": string|null,
+  "type": "bank"|"cash"|"savings"|"investment"|null,
+  "currency": string|null,
+  "balance": number|null
+}
+
+Reglas:
+- "efectivo", "billetera", "cash" => type cash.
+- bancos como Santander, BROU, ItaÃº, BBVA => type bank.
+- "caja de ahorro", "ahorro" => type savings.
+- El balance es el saldo actual disponible en esa cuenta, no el gasto a registrar.
+- Si dice "estÃ¡ en cero" o "0" => balance 0.`,
+    text,
+    "gpt-4o"
+  );
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { name: null, type: null, currency: null, balance: null };
+  try {
+    return JSON.parse(match[0]) as { name: string | null; type: string | null; currency: string | null; balance: number | null };
+  } catch {
+    return { name: null, type: null, currency: null, balance: null };
+  }
+}
+
+// â”€â”€â”€ Resolve category ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function resolveCategoryId(userId: string, categoryName: string | null): Promise<string | null> {
   if (!categoryName) return null;
   const supabase = db();
@@ -383,7 +457,7 @@ async function resolveCategoryId(userId: string, categoryName: string | null): P
   return data?.id ?? null;
 }
 
-// ─── Insert transaction ───────────────────────────────────────────────────────
+// â”€â”€â”€ Insert transaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface TxPayload {
   type: "expense" | "income";
   amount: number;
@@ -410,7 +484,7 @@ async function insertTransaction(
       .from("accounts").select("balance, currency").eq("id", accountId).single();
     if (acc && acc.balance < tx.amount) {
       const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(acc.balance);
-      balanceWarning = `\n\n⚠️ _Saldo insuficiente: tu cuenta tiene ${acc.currency} ${fmt}. El gasto fue registrado igual._`;
+      balanceWarning = `\n\nâš ï¸ _Saldo insuficiente: tu cuenta tiene ${acc.currency} ${fmt}. El gasto fue registrado igual._`;
     }
   }
 
@@ -431,40 +505,40 @@ async function insertTransaction(
   }).select().single();
 
   if (txErr || !saved) {
-    await sendReply("❌ Error al guardar. Intentá de nuevo.");
+    await sendReply("âŒ Error al guardar. IntentÃ¡ de nuevo.");
     return;
   }
 
-  const emoji = tx.type === "income" ? "💰" : "💸";
+  const emoji = tx.type === "income" ? "ðŸ’°" : "ðŸ’¸";
   const typeLabel = tx.type === "income" ? "Ingreso" : "Gasto";
   const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
 
   await sendReply(
     `${emoji} *${typeLabel} guardado* en ${accountName}\n\n` +
-    `📌 *${tx.merchant ?? tx.category ?? "Sin descripción"}*\n` +
-    `💵 ${tx.currency ?? currency} ${amt}\n` +
-    `📅 ${tx.date ?? "hoy"}\n` +
-    (tx.notes ? `📝 ${tx.notes}\n` : "") +
-    `\n✅ Registrado exitosamente` +
+    `ðŸ“Œ *${tx.merchant ?? tx.category ?? "Sin descripciÃ³n"}*\n` +
+    `ðŸ’µ ${tx.currency ?? currency} ${amt}\n` +
+    `ðŸ“… ${tx.date ?? "hoy"}\n` +
+    (tx.notes ? `ðŸ“ ${tx.notes}\n` : "") +
+    `\nâœ… Registrado exitosamente` +
     balanceWarning,
     { intent: "TRANSACTION", transactionId: saved.id }
   );
 }
 
-// ─── Extract account correction during confirmation ───────────────────────────
+// â”€â”€â”€ Extract account correction during confirmation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function extractConfirmationResponse(
   text: string,
   current: { name: string | null; type: string | null; currency: string | null }
 ): Promise<{ confirmed: boolean; cancelled: boolean; name?: string; type?: string; currency?: string }> {
   const raw = await gpt(
-    `El usuario está confirmando la creación de esta cuenta:
+    `El usuario estÃ¡ confirmando la creaciÃ³n de esta cuenta:
 Nombre: ${current.name ?? "sin nombre"}
 Tipo: ${current.type ?? "desconocido"}
 Moneda: ${current.currency ?? "desconocida"}
 
-El usuario respondió: "${text}"
+El usuario respondiÃ³: "${text}"
 
-Respondé SOLO JSON:
+RespondÃ© SOLO JSON:
 {
   "confirmed": true|false,
   "cancelled": true|false,
@@ -473,10 +547,10 @@ Respondé SOLO JSON:
   "currency": string|null
 }
 
-- confirmed=true si el usuario dice sí/ok/dale/correcto/perfecto/claro/si/yes
+- confirmed=true si el usuario dice sÃ­/ok/dale/correcto/perfecto/claro/si/yes
 - cancelled=true si dice no/cancelar/olvidalo/no quiero
 - Si corrige datos (ej: "no, el nombre es Santander"): confirmed=false, cancelled=false, name: "Santander"
-- Solo incluí los campos que cambian, null para el resto`,
+- Solo incluÃ­ los campos que cambian, null para el resto`,
     text,
     "gpt-4o"
   );
@@ -485,7 +559,7 @@ Respondé SOLO JSON:
   try { return JSON.parse(match[0]); } catch { return { confirmed: false, cancelled: false }; }
 }
 
-// ─── Insert transfer between accounts ────────────────────────────────────────
+// â”€â”€â”€ Insert transfer between accounts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function insertTransfer(
   userId: string,
   fromAccountId: string,
@@ -513,24 +587,24 @@ async function insertTransfer(
   });
 
   if (error) {
-    await sendReply("❌ Error al registrar la transferencia. Intentá de nuevo.");
+    await sendReply("âŒ Error al registrar la transferencia. IntentÃ¡ de nuevo.");
     return;
   }
 
   const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(amount);
   await sendReply(
-    `🔄 *Transferencia registrada*\n\n` +
-    `📤 De: *${fromAccountName}*\n` +
-    `📥 A: *${toAccountName}*\n` +
-    `💵 ${currency} ${fmt}\n` +
-    `📅 ${date}\n` +
-    (notes ? `📝 ${notes}\n` : "") +
-    `\n✅ Ambas cuentas actualizadas`,
+    `ðŸ”„ *Transferencia registrada*\n\n` +
+    `ðŸ“¤ De: *${fromAccountName}*\n` +
+    `ðŸ“¥ A: *${toAccountName}*\n` +
+    `ðŸ’µ ${currency} ${fmt}\n` +
+    `ðŸ“… ${date}\n` +
+    (notes ? `ðŸ“ ${notes}\n` : "") +
+    `\nâœ… Ambas cuentas actualizadas`,
     { intent: "TRANSFER" }
   );
 }
 
-// ─── Resolve account from name (fuzzy match) ──────────────────────────────────
+// â”€â”€â”€ Resolve account from name (fuzzy match) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function matchAccount(name: string | null, accounts: AccountInfo[]): AccountInfo | null {
   if (!name) return null;
   const lower = name.toLowerCase();
@@ -540,7 +614,7 @@ function matchAccount(name: string | null, accounts: AccountInfo[]): AccountInfo
   // Partial match
   const partial = accounts.find(a => a.name.toLowerCase().includes(lower) || lower.includes(a.name.toLowerCase()));
   if (partial) return partial;
-  // Type-based match (e.g. "efectivo" → type cash)
+  // Type-based match (e.g. "efectivo" â†’ type cash)
   if (["efectivo", "cash", "billetera"].some(k => lower.includes(k))) {
     return accounts.find(a => a.type === "cash") ?? null;
   }
@@ -553,12 +627,12 @@ function matchAccount(name: string | null, accounts: AccountInfo[]): AccountInfo
   return null;
 }
 
-// ─── Account type helpers ─────────────────────────────────────────────────────
+// â”€â”€â”€ Account type helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ACCOUNT_TYPES: Record<string, string> = {
   "1": "bank", "banco": "bank", "bank": "bank", "bancaria": "bank", "corriente": "bank",
   "2": "cash", "efectivo": "cash", "cash": "cash", "billetera": "cash",
   "3": "savings", "ahorro": "savings", "ahorros": "savings", "caja": "savings", "saving": "savings",
-  "4": "investment", "inversión": "investment", "inversion": "investment", "inversiones": "investment",
+  "4": "investment", "inversiÃ³n": "investment", "inversion": "investment", "inversiones": "investment",
 };
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -577,7 +651,7 @@ function resolveAccountType(input: string): string | null {
   return ACCOUNT_TYPES[input.toLowerCase().trim()] ?? null;
 }
 
-// ─── Main webhook handler ─────────────────────────────────────────────────────
+// â”€â”€â”€ Main webhook handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -628,10 +702,10 @@ export async function POST(req: NextRequest) {
     // Unknown user
     if (!profile) {
       await reply(
-        `👋 ¡Hola! No encontré una cuenta de *FlowMind* asociada a este número (${phoneWithPlus}).\n\n` +
-        `*¿Aún no tenés cuenta?*\n👉 ${APP_URL}/register\n\n` +
-        `*¿Ya tenés cuenta?*\nVinculá este número desde:\nConfiguración → WhatsApp → ingresá *${phoneWithPlus}*\n\n` +
-        `Después podés mandarme tus gastos, ingresos y fotos de tickets directamente por acá 💸`
+        `ðŸ‘‹ Â¡Hola! No encontrÃ© una cuenta de *FlowMind* asociada a este nÃºmero (${phoneWithPlus}).\n\n` +
+        `*Â¿AÃºn no tenÃ©s cuenta?*\nðŸ‘‰ ${APP_URL}/register\n\n` +
+        `*Â¿Ya tenÃ©s cuenta?*\nVinculÃ¡ este nÃºmero desde:\nConfiguraciÃ³n â†’ WhatsApp â†’ ingresÃ¡ *${phoneWithPlus}*\n\n` +
+        `DespuÃ©s podÃ©s mandarme tus gastos, ingresos y fotos de tickets directamente por acÃ¡ ðŸ’¸`
       );
       return NextResponse.json({ received: true });
     }
@@ -639,14 +713,14 @@ export async function POST(req: NextRequest) {
     const userName = profile.display_name ?? "Usuario";
     const currency = profile.currency_default ?? "UYU";
 
-    // ── AI usage limit (500 calls/day) ────────────────────────────────────────
+    // â”€â”€ AI usage limit (500 calls/day) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const AI_DAILY_LIMIT = 500;
     const resetAt = profile.ai_usage_reset_at ? new Date(profile.ai_usage_reset_at) : null;
     const now = new Date();
     const isNewDay = !resetAt || resetAt.toDateString() !== now.toDateString();
     const currentUsage = isNewDay ? 0 : (profile.ai_usage_count ?? 0);
     if (currentUsage >= AI_DAILY_LIMIT) {
-      await reply(`⚠️ Alcanzaste el límite diario de consultas de IA. Se reinicia a las 00:00.`);
+      await reply(`âš ï¸ Alcanzaste el lÃ­mite diario de consultas de IA. Se reinicia a las 00:00.`);
       return NextResponse.json({ received: true });
     }
     if (isNewDay) {
@@ -689,7 +763,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Check for active pending state ────────────────────────────────────────
+    // â”€â”€ Check for active pending state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const { data: pending } = await supabase
       .from("whatsapp_pending")
       .select("*")
@@ -702,7 +776,7 @@ export async function POST(req: NextRequest) {
     if (pending && textContent) {
       if (pending.pending_type === "upgrade_offer") {
         const answer = textContent.trim().toLowerCase();
-        if (["si", "sí", "ok", "dale", "quiero", "pro", "mensual", "anual"].some((w) => answer.includes(w))) {
+        if (["si", "sÃ­", "ok", "dale", "quiero", "pro", "mensual", "anual"].some((w) => answer.includes(w))) {
           await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
           await reply(
             `Perfecto. Para activar *FlowMind Pro*, entra a este link y elegi mensual o anual:\n\n` +
@@ -714,7 +788,43 @@ export async function POST(req: NextRequest) {
         await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
       }
 
-      // ── Pending: account selection for transaction ──────────────────────────
+      // â”€â”€ Pending: account selection for transaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      if (pending.pending_type === "first_account_for_tx") {
+        const setup = await extractInitialAccountSetup(textContent, currency);
+        if (!setup.name || !setup.type || setup.balance === null || Number.isNaN(Number(setup.balance))) {
+          await reply(
+            `Casi. Para registrar ese primer movimiento necesito crear tu primera cuenta con su saldo actual.\n\n` +
+            `Decime algo como: *Efectivo UYU 5000* o *Santander USD 1200*.\n` +
+            `Si estÃ¡ en cero, decime: *Efectivo UYU 0*.`
+          );
+          return NextResponse.json({ received: true });
+        }
+
+        await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
+        const accountCurrency = setup.currency ?? currency;
+        const balance = Number(setup.balance);
+        const { data: newAcc, error } = await supabase.from("accounts").insert({
+          user_id: userId,
+          name: setup.name,
+          type: setup.type,
+          currency: accountCurrency,
+          initial_balance: balance,
+          balance,
+          is_primary: true,
+          icon: setup.type === "bank" ? "bank" : setup.type === "savings" ? "piggy_bank" : "wallet",
+          color: "#10b981",
+        }).select().single();
+
+        if (error || !newAcc) {
+          await reply(`No pude crear la cuenta desde WhatsApp. ProbÃ¡ desde la app: ${APP_URL}/accounts`);
+          return NextResponse.json({ received: true });
+        }
+
+        const txData: TxPayload = pending.payload.transaction;
+        await insertTransaction(userId!, newAcc.id, newAcc.name, txData, currency, reply);
+        return NextResponse.json({ received: true });
+      }
+
       if (pending.pending_type === "account_selection") {
         const choice = parseInt(textContent.trim(), 10);
         const accounts: { id: string; name: string }[] = pending.payload.accounts ?? [];
@@ -725,7 +835,7 @@ export async function POST(req: NextRequest) {
 
           if (pending.payload.correction_tx_id) {
             await supabase.from("transactions").update({ account_id: selectedAccount.id }).eq("id", pending.payload.correction_tx_id);
-            await reply(`✅ Moví *${pending.payload.correction_label ?? "el movimiento"}* a la cuenta *${selectedAccount.name}*`);
+            await reply(`âœ… MovÃ­ *${pending.payload.correction_label ?? "el movimiento"}* a la cuenta *${selectedAccount.name}*`);
           } else {
             const txData: TxPayload = pending.payload;
             await insertTransaction(userId!, selectedAccount.id, selectedAccount.name, txData, currency, reply);
@@ -733,12 +843,12 @@ export async function POST(req: NextRequest) {
           }
         } else {
           const list = accounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
-          await reply(`❓ Opción inválida. Respondé con el número:\n\n${list}`);
+          await reply(`â“ OpciÃ³n invÃ¡lida. RespondÃ© con el nÃºmero:\n\n${list}`);
         }
         return NextResponse.json({ received: true });
       }
 
-      // ── Pending: transfer — waiting for from account ─────────────────────
+      // â”€â”€ Pending: transfer â€” waiting for from account â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (pending.pending_type === "transfer_select_from") {
         const choice = parseInt(textContent.trim(), 10);
         const accounts: AccountInfo[] = pending.payload.accounts ?? [];
@@ -756,16 +866,16 @@ export async function POST(req: NextRequest) {
               phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "transfer_select_to",
               payload: { amount, currency: txCurrency, from_account_id: selected.id, from_account_name: selected.name, date, notes, accounts: remaining },
             });
-            await reply(`¿A qué cuenta va el dinero?\n\n${list}\n\n_Respondé con el número._`);
+            await reply(`Â¿A quÃ© cuenta va el dinero?\n\n${list}\n\n_RespondÃ© con el nÃºmero._`);
           }
         } else {
           const list = (pending.payload.accounts as AccountInfo[]).map((a: AccountInfo, i: number) => `${i + 1}. ${a.name}`).join("\n");
-          await reply(`❓ Opción inválida:\n\n${list}`);
+          await reply(`â“ OpciÃ³n invÃ¡lida:\n\n${list}`);
         }
         return NextResponse.json({ received: true });
       }
 
-      // ── Pending: transfer — waiting for to account ────────────────────────
+      // â”€â”€ Pending: transfer â€” waiting for to account â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (pending.pending_type === "transfer_select_to") {
         const choice = parseInt(textContent.trim(), 10);
         const accounts: AccountInfo[] = pending.payload.accounts ?? [];
@@ -776,19 +886,19 @@ export async function POST(req: NextRequest) {
           await insertTransfer(userId!, from_account_id, from_account_name, selected.id, selected.name, amount, txCurrency, date, notes, reply);
         } else {
           const list = (pending.payload.accounts as AccountInfo[]).map((a: AccountInfo, i: number) => `${i + 1}. ${a.name}`).join("\n");
-          await reply(`❓ Opción inválida:\n\n${list}`);
+          await reply(`â“ OpciÃ³n invÃ¡lida:\n\n${list}`);
         }
         return NextResponse.json({ received: true });
       }
 
-      // ── Pending: account creation — waiting for confirmation ─────────────
+      // â”€â”€ Pending: account creation â€” waiting for confirmation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (pending.pending_type === "account_creation_confirm") {
         const { name, type, currency: accCurrency } = pending.payload;
         const response = await extractConfirmationResponse(textContent, { name, type, currency: accCurrency });
 
         if (response.cancelled) {
           await supabase.from("whatsapp_pending").delete().eq("id", pending.id);
-          await reply("👍 Cancelé la creación de la cuenta. Avisame cuando quieras intentarlo de nuevo.");
+          await reply("ðŸ‘ CancelÃ© la creaciÃ³n de la cuenta. Avisame cuando quieras intentarlo de nuevo.");
           return NextResponse.json({ received: true });
         }
 
@@ -808,12 +918,12 @@ export async function POST(req: NextRequest) {
           }).select().single();
 
           if (error || !newAcc) {
-            await reply(`❌ No pude crear la cuenta. Intentá desde la app: 👉 ${APP_URL}/accounts`);
+            await reply(`âŒ No pude crear la cuenta. IntentÃ¡ desde la app: ðŸ‘‰ ${APP_URL}/accounts`);
           } else {
             await reply(
-              `✅ *Cuenta creada*\n\n🏦 *${newAcc.name}*\n` +
-              `📋 ${ACCOUNT_TYPE_LABELS[updatedType ?? "bank"] ?? updatedType}\n` +
-              `💱 ${newAcc.currency}\n\nYa podés usarla para registrar movimientos 🎉`
+              `âœ… *Cuenta creada*\n\nðŸ¦ *${newAcc.name}*\n` +
+              `ðŸ“‹ ${ACCOUNT_TYPE_LABELS[updatedType ?? "bank"] ?? updatedType}\n` +
+              `ðŸ’± ${newAcc.currency}\n\nYa podÃ©s usarla para registrar movimientos ðŸŽ‰`
             );
           }
         } else {
@@ -823,24 +933,24 @@ export async function POST(req: NextRequest) {
             expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
           }).eq("id", pending.id);
           await reply(
-            `📝 Actualicé los datos. ¿Así está bien?\n\n` +
-            `🏦 *${updatedName ?? "Sin nombre"}*\n` +
-            `📋 ${ACCOUNT_TYPE_LABELS[updatedType ?? ""] ?? updatedType ?? "?"}\n` +
-            `💱 ${updatedCurrency ?? currency}\n\n` +
-            `Respondé *sí* para confirmar o decime qué cambiar.`
+            `ðŸ“ ActualicÃ© los datos. Â¿AsÃ­ estÃ¡ bien?\n\n` +
+            `ðŸ¦ *${updatedName ?? "Sin nombre"}*\n` +
+            `ðŸ“‹ ${ACCOUNT_TYPE_LABELS[updatedType ?? ""] ?? updatedType ?? "?"}\n` +
+            `ðŸ’± ${updatedCurrency ?? currency}\n\n` +
+            `RespondÃ© *sÃ­* para confirmar o decime quÃ© cambiar.`
           );
         }
         return NextResponse.json({ received: true });
       }
 
-      // ── Pending: account creation — waiting for type ──────────────────────
+      // â”€â”€ Pending: account creation â€” waiting for type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (pending.pending_type === "account_creation_type") {
         const resolvedType = resolveAccountType(textContent.trim());
         if (!resolvedType) {
           await reply(
-            `❓ No reconocí ese tipo. Elegí una opción:\n\n` +
+            `â“ No reconocÃ­ ese tipo. ElegÃ­ una opciÃ³n:\n\n` +
             `1. Banco / Cuenta corriente\n2. Efectivo / Billetera\n3. Caja de ahorro\n4. Inversiones\n\n` +
-            `_Respondé con el número o el nombre._`
+            `_RespondÃ© con el nÃºmero o el nombre._`
           );
           return NextResponse.json({ received: true });
         }
@@ -854,22 +964,22 @@ export async function POST(req: NextRequest) {
         const finalCurr = accCurrency ?? currency;
         await reply(
           `Voy a crear esta cuenta:\n\n` +
-          `🏦 *${name ?? "Sin nombre"}*\n` +
-          `📋 ${ACCOUNT_TYPE_LABELS[resolvedType] ?? resolvedType}\n` +
-          `💱 ${finalCurr}\n\n` +
-          `¿Está bien así? Respondé *sí* para confirmar o decime si querés cambiar algo.`
+          `ðŸ¦ *${name ?? "Sin nombre"}*\n` +
+          `ðŸ“‹ ${ACCOUNT_TYPE_LABELS[resolvedType] ?? resolvedType}\n` +
+          `ðŸ’± ${finalCurr}\n\n` +
+          `Â¿EstÃ¡ bien asÃ­? RespondÃ© *sÃ­* para confirmar o decime si querÃ©s cambiar algo.`
         );
         return NextResponse.json({ received: true });
       }
 
-      // ── Pending: account creation — waiting for currency ─────────────────
+      // â”€â”€ Pending: account creation â€” waiting for currency â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (pending.pending_type === "account_creation_currency") {
         const inputCurrency = textContent.trim().toUpperCase();
         const validCurrencies = ["UYU", "USD", "EUR", "ARS", "BRL"];
         const resolvedCurrency = validCurrencies.find(c => inputCurrency.includes(c)) ?? null;
 
         if (!resolvedCurrency) {
-          await reply(`❓ No reconocí la moneda. Ejemplos: UYU, USD, EUR, ARS\n\n¿En qué moneda es la cuenta?`);
+          await reply(`â“ No reconocÃ­ la moneda. Ejemplos: UYU, USD, EUR, ARS\n\nÂ¿En quÃ© moneda es la cuenta?`);
           return NextResponse.json({ received: true });
         }
 
@@ -889,21 +999,21 @@ export async function POST(req: NextRequest) {
         }).select().single();
 
         if (error || !newAcc) {
-          await reply("❌ No pude crear la cuenta. Intentá desde la app: " + APP_URL + "/accounts");
+          await reply("âŒ No pude crear la cuenta. IntentÃ¡ desde la app: " + APP_URL + "/accounts");
         } else {
           await reply(
-            `✅ *Cuenta creada exitosamente*\n\n` +
-            `🏦 *${newAcc.name}*\n` +
-            `📋 Tipo: ${ACCOUNT_TYPE_LABELS[type] ?? type}\n` +
-            `💱 Moneda: ${newAcc.currency}\n\n` +
-            `Ya podés registrar movimientos en esta cuenta 🎉`
+            `âœ… *Cuenta creada exitosamente*\n\n` +
+            `ðŸ¦ *${newAcc.name}*\n` +
+            `ðŸ“‹ Tipo: ${ACCOUNT_TYPE_LABELS[type] ?? type}\n` +
+            `ðŸ’± Moneda: ${newAcc.currency}\n\n` +
+            `Ya podÃ©s registrar movimientos en esta cuenta ðŸŽ‰`
           );
         }
         return NextResponse.json({ received: true });
       }
     }
 
-    // ── Get all user accounts ─────────────────────────────────────────────────
+    // â”€â”€ Get all user accounts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const { data: allAccounts } = await supabase
       .from("accounts").select("id, name, type, balance, currency")
       .eq("user_id", userId)
@@ -918,42 +1028,42 @@ export async function POST(req: NextRequest) {
     let processedText: string | null = textContent;
     let source = "whatsapp";
 
-    // ── Audio: transcribe ─────────────────────────────────────────────────────
+    // â”€â”€ Audio: transcribe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (hasAudio) {
       const audioB64 = await downloadMedia(remoteJid, msgData.key?.id ?? "");
-      if (!audioB64) { await reply("❌ No pude procesar el audio. Intentá por texto."); return NextResponse.json({ received: true }); }
+      if (!audioB64) { await reply("âŒ No pude procesar el audio. IntentÃ¡ por texto."); return NextResponse.json({ received: true }); }
       try {
         processedText = await whisper(audioB64);
         source = "whatsapp_voice";
         void logMsg({ userId, phone: rawPhone, direction: "inbound", messageType: "audio", content: processedText });
-        await reply(`🎤 _Transcripción: "${processedText}"_\n\nProcesando...`);
+        await reply(`ðŸŽ¤ _TranscripciÃ³n: "${processedText}"_\n\nProcesando...`);
       } catch {
-        await reply("❌ Error transcribiendo el audio. Intentá por texto.");
+        await reply("âŒ Error transcribiendo el audio. IntentÃ¡ por texto.");
         return NextResponse.json({ received: true });
       }
     }
 
-    // ── Image: analyze receipt ────────────────────────────────────────────────
+    // â”€â”€ Image: analyze receipt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (hasImage) {
       const imgB64 = await downloadMedia(remoteJid, msgData.key?.id ?? "");
-      if (!imgB64) { await reply("❌ No pude descargar la imagen."); return NextResponse.json({ received: true }); }
+      if (!imgB64) { await reply("âŒ No pude descargar la imagen."); return NextResponse.json({ received: true }); }
 
       const dataUri = imgB64.startsWith("data:") ? imgB64 : `data:image/jpeg;base64,${imgB64}`;
       const today = new Date().toISOString().split("T")[0];
-      const system = `Analizás tickets/facturas. Respondé SOLO JSON:
+      const system = `AnalizÃ¡s tickets/facturas. RespondÃ© SOLO JSON:
 {"type":"expense","amount":number,"currency":"${currency}","merchant":string|null,"date":"YYYY-MM-DD","category":string|null,"notes":string|null}
 Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
       try {
         const raw = await gpt(system, [
           { type: "image_url", image_url: { url: dataUri, detail: "high" } },
-          { type: "text", text: "Extraé los datos de este ticket/factura." },
+          { type: "text", text: "ExtraÃ© los datos de este ticket/factura." },
         ] as object[]);
         const match = raw.match(/\{[\s\S]*\}/);
         if (!match) throw new Error("no json");
         const parsed = JSON.parse(match[0]);
         if (parsed.error === "not_a_receipt") {
-          await reply("🤔 No pude leer un ticket en la imagen. ¿Podés describirlo por texto?");
+          await reply("ðŸ¤” No pude leer un ticket en la imagen. Â¿PodÃ©s describirlo por texto?");
           return NextResponse.json({ received: true });
         }
 
@@ -965,7 +1075,18 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         };
 
         if (!allAccounts || allAccounts.length === 0) {
-          await reply(`⚠️ Detecté un ticket pero no tenés cuentas configuradas.\nCreá una desde la app: 👉 ${APP_URL}/accounts`);
+          await supabase.from("whatsapp_pending").insert({
+            phone: rawPhone,
+            user_id: userId,
+            expires_at: pendingExpiry(),
+            pending_type: "first_account_for_tx",
+            payload: { transaction: txPayload },
+          });
+          await reply(
+            `Leí el ticket, pero antes necesito crear tu primera cuenta con su saldo actual.\n\n` +
+            `Respondeme algo como *Efectivo UYU 5000* o *Santander USD 1200*. ` +
+            `Si está en cero: *Efectivo UYU 0*.`
+          );
         } else if (allAccounts.length === 1) {
           await insertTransaction(userId!, allAccounts[0].id, allAccounts[0].name, txPayload, currency, reply);
         } else {
@@ -976,15 +1097,15 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
             payload: { ...txPayload, accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
           await reply(
-            `🧾 *Ticket:* ${parsed.merchant ?? "Sin comercio"} — ${parsed.currency ?? currency} ${amt}\n\n` +
-            `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número._`
+            `ðŸ§¾ *Ticket:* ${parsed.merchant ?? "Sin comercio"} â€” ${parsed.currency ?? currency} ${amt}\n\n` +
+            `Â¿En quÃ© cuenta lo registrÃ¡s?\n\n${accountList}\n\n_RespondÃ© con el nÃºmero._`
           );
         }
         await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
         return NextResponse.json({ received: true });
       } catch (e) {
         console.error("Image error:", e);
-        await reply("❌ No pude analizar el ticket. Describílo por texto.");
+        await reply("âŒ No pude analizar el ticket. DescribÃ­lo por texto.");
         return NextResponse.json({ received: true });
       }
     }
@@ -994,19 +1115,19 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
     const lowerText = processedText.toLowerCase().trim();
     if (lowerText === "ayuda" || lowerText === "help" || lowerText === "?") {
       await reply(
-        `👋 Hola *${userName}*! Soy tu asistente financiero. Podés hablarme de forma natural:\n\n` +
-        `💸 *Gastos:* "Gasté 500 en el super" / "Pagué el alquiler 15000"\n` +
-        `💰 *Ingresos:* "Cobré el sueldo 45000" / "Me entraron 8000"\n` +
-        `🔄 *Transferencias:* "Pasé 5000 del banco al efectivo"\n` +
-        `📸 *Tickets:* Mandá una foto de cualquier factura\n` +
-        `🎤 *Voz:* Mandá una nota de voz\n` +
-        `📊 *Consultas:* "¿Cómo estoy este mes?" / "¿En qué gasté más?"\n` +
-        `🤖 *Análisis IA:* "Dame un análisis de mis finanzas"\n` +
-        `🔔 *Alertas:* "Avisame si gasto más de 10000 en comida"\n` +
-        `🎯 *Metas de ahorro:* "Quiero ahorrar 50000 para vacaciones"\n` +
-        `✏️ *Correcciones:* "Ese gasto ponelo en Santander" / "Borrá el último"\n` +
-        `🏦 *Cuentas:* "Quiero crear una cuenta en el Itaú"\n` +
-        `🎫 *Soporte:* "Quiero hacer un reclamo" / "Tengo un problema"`,
+        `ðŸ‘‹ Hola *${userName}*! Soy tu asistente financiero. PodÃ©s hablarme de forma natural:\n\n` +
+        `ðŸ’¸ *Gastos:* "GastÃ© 500 en el super" / "PaguÃ© el alquiler 15000"\n` +
+        `ðŸ’° *Ingresos:* "CobrÃ© el sueldo 45000" / "Me entraron 8000"\n` +
+        `ðŸ”„ *Transferencias:* "PasÃ© 5000 del banco al efectivo"\n` +
+        `ðŸ“¸ *Tickets:* MandÃ¡ una foto de cualquier factura\n` +
+        `ðŸŽ¤ *Voz:* MandÃ¡ una nota de voz\n` +
+        `ðŸ“Š *Consultas:* "Â¿CÃ³mo estoy este mes?" / "Â¿En quÃ© gastÃ© mÃ¡s?"\n` +
+        `ðŸ¤– *AnÃ¡lisis IA:* "Dame un anÃ¡lisis de mis finanzas"\n` +
+        `ðŸ”” *Alertas:* "Avisame si gasto mÃ¡s de 10000 en comida"\n` +
+        `ðŸŽ¯ *Metas de ahorro:* "Quiero ahorrar 50000 para vacaciones"\n` +
+        `âœï¸ *Correcciones:* "Ese gasto ponelo en Santander" / "BorrÃ¡ el Ãºltimo"\n` +
+        `ðŸ¦ *Cuentas:* "Quiero crear una cuenta en el ItaÃº"\n` +
+        `ðŸŽ« *Soporte:* "Quiero hacer un reclamo" / "Tengo un problema"`,
         { intent: "HELP" }
       );
       return NextResponse.json({ received: true });
@@ -1026,10 +1147,11 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       account_name: (t.accounts as unknown as { name: string } | null)?.name ?? null,
     }));
 
-    const intent = await classifyMessage(processedText, currency, recentTxs, accountsForClassifier);
+    const conversationMemory = await getConversationMemory(rawPhone, userId);
+    const intent = await classifyMessage(processedText, currency, recentTxs, accountsForClassifier, conversationMemory);
     await supabase.from("profiles").update({ ai_usage_count: (profile.ai_usage_count ?? 0) + 1 }).eq("id", userId);
 
-    // ── ACCOUNT_CREATION ──────────────────────────────────────────────────────
+    // â”€â”€ ACCOUNT_CREATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "ACCOUNT_CREATION") {
       const ac = intent.account_creation ?? { name: null, type: null, currency: null };
       const accName: string | null = ac.name ?? null;
@@ -1044,9 +1166,9 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
         });
         const nameStr = accName ? ` para *${accName}*` : "";
         await reply(
-          `🏦 Voy a crear tu cuenta${nameStr}. ¿Qué tipo de cuenta es?\n\n` +
+          `ðŸ¦ Voy a crear tu cuenta${nameStr}. Â¿QuÃ© tipo de cuenta es?\n\n` +
           `1. Banco / Cuenta corriente\n2. Efectivo / Billetera\n3. Caja de ahorro\n4. Inversiones\n\n` +
-          `_Respondé con el número o el nombre._`
+          `_RespondÃ© con el nÃºmero o el nombre._`
         );
         return NextResponse.json({ received: true });
       }
@@ -1062,23 +1184,34 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       });
       await reply(
         `Voy a crear esta cuenta:\n\n` +
-        `🏦 *${accName ?? "Sin nombre"}*\n` +
-        `📋 ${ACCOUNT_TYPE_LABELS[accType] ?? accType}\n` +
-        `💱 ${finalCurrency2}\n\n` +
-        `¿Está bien así? Respondé *sí* para confirmar o decime si querés cambiar algo.`
+        `ðŸ¦ *${accName ?? "Sin nombre"}*\n` +
+        `ðŸ“‹ ${ACCOUNT_TYPE_LABELS[accType] ?? accType}\n` +
+        `ðŸ’± ${finalCurrency2}\n\n` +
+        `Â¿EstÃ¡ bien asÃ­? RespondÃ© *sÃ­* para confirmar o decime si querÃ©s cambiar algo.`
       );
       return NextResponse.json({ received: true });
     }
 
-    // ── TRANSACTION ───────────────────────────────────────────────────────────
+    // â”€â”€ TRANSACTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "TRANSACTION" && intent.transaction) {
       const tx = intent.transaction;
 
       if (!allAccounts || allAccounts.length === 0) {
+        await supabase.from("whatsapp_pending").insert({
+          phone: rawPhone,
+          user_id: userId,
+          expires_at: pendingExpiry(),
+          pending_type: "first_account_for_tx",
+          payload: { transaction: { ...tx, source } },
+        });
         await reply(
-          `⚠️ *No tenés cuentas configuradas aún.*\n\n` +
-          `Podés crear una ahora mismo diciéndome:\n_"Quiero crear una cuenta en [banco/efectivo]"_\n\n` +
-          `O desde la app: 👉 ${APP_URL}/accounts`
+          `âš ï¸ *No tenÃ©s cuentas configuradas aÃºn.*\n\n` +
+          `PodÃ©s crear una ahora mismo diciÃ©ndome:\n_"Quiero crear una cuenta en [banco/efectivo]"_\n\n` +
+          `O desde la app: ðŸ‘‰ ${APP_URL}/accounts`
+        );
+        await reply(
+          `Para registrar este primer movimiento por WhatsApp, respondeme con nombre, moneda y saldo actual. ` +
+          `Ej: *Efectivo UYU 5000* o *Santander USD 1200*. Si esta en cero: *Efectivo UYU 0*.`
         );
         return NextResponse.json({ received: true });
       }
@@ -1088,21 +1221,21 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       } else {
         const accountList = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
         const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(tx.amount);
-        const emoji = tx.type === "income" ? "💰" : "💸";
+        const emoji = tx.type === "income" ? "ðŸ’°" : "ðŸ’¸";
         await supabase.from("whatsapp_pending").insert({
           phone: rawPhone, user_id: userId, expires_at: pendingExpiry(), pending_type: "account_selection",
           payload: { ...tx, source, accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
         });
         await reply(
           `${emoji} *${tx.type === "income" ? "Ingreso" : "Gasto"} detectado:* ` +
-          `${tx.merchant ?? tx.category ?? "movimiento"} — ${tx.currency ?? currency} ${amt}\n\n` +
-          `¿En qué cuenta lo registrás?\n\n${accountList}\n\n_Respondé con el número._`
+          `${tx.merchant ?? tx.category ?? "movimiento"} â€” ${tx.currency ?? currency} ${amt}\n\n` +
+          `Â¿En quÃ© cuenta lo registrÃ¡s?\n\n${accountList}\n\n_RespondÃ© con el nÃºmero._`
         );
       }
       return NextResponse.json({ received: true });
     }
 
-    // ── TRANSFER ──────────────────────────────────────────────────────────────
+    // â”€â”€ TRANSFER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "TRANSFER" && intent.transfer) {
       const tr = intent.transfer;
       const today = new Date().toISOString().split("T")[0];
@@ -1112,9 +1245,9 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
       if (!allAccounts || allAccounts.length < 2) {
         await reply(
-          `⚠️ Necesitás al menos *2 cuentas* para registrar una transferencia.\n\n` +
-          `Creá otra cuenta diciéndome: _"Quiero crear una cuenta en [banco/efectivo]"_\n` +
-          `O desde la app: 👉 ${APP_URL}/accounts`
+          `âš ï¸ NecesitÃ¡s al menos *2 cuentas* para registrar una transferencia.\n\n` +
+          `CreÃ¡ otra cuenta diciÃ©ndome: _"Quiero crear una cuenta en [banco/efectivo]"_\n` +
+          `O desde la app: ðŸ‘‰ ${APP_URL}/accounts`
         );
         return NextResponse.json({ received: true });
       }
@@ -1141,8 +1274,8 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
           },
         });
         await reply(
-          `🔄 Transferencia de *${txCurrency} ${fmt}*${toAcc ? ` → *${toAcc.name}*` : ""}\n\n` +
-          `¿De qué cuenta sale el dinero?\n\n${list}\n\n_Respondé con el número._`
+          `ðŸ”„ Transferencia de *${txCurrency} ${fmt}*${toAcc ? ` â†’ *${toAcc.name}*` : ""}\n\n` +
+          `Â¿De quÃ© cuenta sale el dinero?\n\n${list}\n\n_RespondÃ© con el nÃºmero._`
         );
         return NextResponse.json({ received: true });
       }
@@ -1160,18 +1293,18 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
           },
         });
         await reply(
-          `🔄 Transferencia de *${fromAcc.name}* — *${txCurrency} ${fmt}*\n\n` +
-          `¿A qué cuenta va el dinero?\n\n${list}\n\n_Respondé con el número._`
+          `ðŸ”„ Transferencia de *${fromAcc.name}* â€” *${txCurrency} ${fmt}*\n\n` +
+          `Â¿A quÃ© cuenta va el dinero?\n\n${list}\n\n_RespondÃ© con el nÃºmero._`
         );
         return NextResponse.json({ received: true });
       }
 
       // Same account error
-      await reply(`⚠️ La cuenta de origen y destino no pueden ser la misma (*${fromAcc.name}*).`);
+      await reply(`âš ï¸ La cuenta de origen y destino no pueden ser la misma (*${fromAcc.name}*).`);
       return NextResponse.json({ received: true });
     }
 
-    // ── CORRECTION ────────────────────────────────────────────────────────────
+    // â”€â”€ CORRECTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "CORRECTION" && intent.correction) {
       const corr = intent.correction;
 
@@ -1186,14 +1319,14 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       const { data: lastTx } = await lastTxQuery.maybeSingle();
 
       if (!lastTx) {
-        await reply("🤔 No encontré ningún movimiento reciente para corregir. Registrá algo primero.");
+        await reply("ðŸ¤” No encontrÃ© ningÃºn movimiento reciente para corregir. RegistrÃ¡ algo primero.");
         return NextResponse.json({ received: true });
       }
 
       const txLabel = lastTx.merchant ??
         `${lastTx.type === "income" ? "ingreso" : "gasto"} de ${lastTx.currency} ${lastTx.amount}`;
 
-      // ── Rename last created account ─────────────────────────────────────────
+      // â”€â”€ Rename last created account â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (corr.action === "rename_account" && corr.new_name) {
         const { data: lastAcc } = await supabase
           .from("accounts").select("id, name")
@@ -1202,32 +1335,32 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
           .limit(1).maybeSingle();
 
         if (!lastAcc) {
-          await reply("🤔 No encontré ninguna cuenta reciente para renombrar.");
+          await reply("ðŸ¤” No encontrÃ© ninguna cuenta reciente para renombrar.");
           return NextResponse.json({ received: true });
         }
         await supabase.from("accounts").update({ name: corr.new_name }).eq("id", lastAcc.id);
-        await reply(`✅ Renombré la cuenta *${lastAcc.name}* a *${corr.new_name}*`);
+        await reply(`âœ… RenombrÃ© la cuenta *${lastAcc.name}* a *${corr.new_name}*`);
         return NextResponse.json({ received: true });
       }
 
       if (corr.action === "delete") {
         await supabase.from("transactions").delete().eq("id", lastTx.id);
-        await reply(`🗑️ Eliminé el último movimiento: *${txLabel}*`);
+        await reply(`ðŸ—‘ï¸ EliminÃ© el Ãºltimo movimiento: *${txLabel}*`);
         return NextResponse.json({ received: true });
       }
 
       if (corr.action === "change_amount" && corr.new_amount) {
         await supabase.from("transactions").update({ amount: corr.new_amount }).eq("id", lastTx.id);
         const amt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2 }).format(corr.new_amount);
-        await reply(`✏️ Actualicé el monto de *${txLabel}* a ${lastTx.currency} ${amt}`);
+        await reply(`âœï¸ ActualicÃ© el monto de *${txLabel}* a ${lastTx.currency} ${amt}`);
         return NextResponse.json({ received: true });
       }
 
       if (corr.action === "change_account") {
         if (!corr.account_name) {
-          // No account name specified — show list
+          // No account name specified â€” show list
           if (!allAccounts || allAccounts.length === 0) {
-            await reply(`⚠️ No tenés otras cuentas. Creá una diciéndome "quiero crear una cuenta".`);
+            await reply(`âš ï¸ No tenÃ©s otras cuentas. CreÃ¡ una diciÃ©ndome "quiero crear una cuenta".`);
             return NextResponse.json({ received: true });
           }
           const list = allAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
@@ -1236,7 +1369,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
             payload: { correction_tx_id: lastTx.id, correction_label: txLabel,
               accounts: allAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
-          await reply(`¿A qué cuenta querés mover *${txLabel}*?\n\n${list}\n\n_Respondé con el número._`);
+          await reply(`Â¿A quÃ© cuenta querÃ©s mover *${txLabel}*?\n\n${list}\n\n_RespondÃ© con el nÃºmero._`);
           return NextResponse.json({ received: true });
         }
 
@@ -1248,17 +1381,17 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
         if (!matchedAccounts || matchedAccounts.length === 0) {
           await reply(
-            `⚠️ No encontré ninguna cuenta que se llame *${corr.account_name}*.\n\n` +
-            `¿Querés que te ayude a crearla? Decime:\n` +
+            `âš ï¸ No encontrÃ© ninguna cuenta que se llame *${corr.account_name}*.\n\n` +
+            `Â¿QuerÃ©s que te ayude a crearla? Decime:\n` +
             `_"Quiero crear una cuenta ${corr.account_name}"_\n\n` +
-            `O desde la app: 👉 ${APP_URL}/accounts`
+            `O desde la app: ðŸ‘‰ ${APP_URL}/accounts`
           );
           return NextResponse.json({ received: true });
         }
 
         if (matchedAccounts.length === 1) {
           await supabase.from("transactions").update({ account_id: matchedAccounts[0].id }).eq("id", lastTx.id);
-          await reply(`✅ Moví *${txLabel}* a la cuenta *${matchedAccounts[0].name}*`);
+          await reply(`âœ… MovÃ­ *${txLabel}* a la cuenta *${matchedAccounts[0].name}*`);
         } else {
           const list = matchedAccounts.map((a, i) => `${i + 1}. ${a.name}`).join("\n");
           await supabase.from("whatsapp_pending").insert({
@@ -1266,16 +1399,16 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
             payload: { correction_tx_id: lastTx.id, correction_label: txLabel,
               accounts: matchedAccounts.map(a => ({ id: a.id, name: a.name })) },
           });
-          await reply(`¿A cuál de estas cuentas querés mover *${txLabel}*?\n\n${list}\n\n_Respondé con el número._`);
+          await reply(`Â¿A cuÃ¡l de estas cuentas querÃ©s mover *${txLabel}*?\n\n${list}\n\n_RespondÃ© con el nÃºmero._`);
         }
         return NextResponse.json({ received: true });
       }
 
-      await reply("🤔 ¿Qué querés corregir del último movimiento?\n• \"Ponelo en [cuenta]\"\n• \"El monto era [número]\"\n• \"Borrá el último\"");
+      await reply("ðŸ¤” Â¿QuÃ© querÃ©s corregir del Ãºltimo movimiento?\nâ€¢ \"Ponelo en [cuenta]\"\nâ€¢ \"El monto era [nÃºmero]\"\nâ€¢ \"BorrÃ¡ el Ãºltimo\"");
       return NextResponse.json({ received: true });
     }
 
-    // ── QUERY ─────────────────────────────────────────────────────────────────
+    // â”€â”€ QUERY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "QUERY") {
       if (isFreePlan) {
         await reply(
@@ -1291,7 +1424,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       return NextResponse.json({ received: true });
     }
 
-    // ── MY_INSIGHTS ───────────────────────────────────────────────────────────
+    // â”€â”€ MY_INSIGHTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "MY_INSIGHTS") {
       if (isFreePlan) {
         await reply(
@@ -1309,37 +1442,37 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
 
       if (!insights || insights.length === 0) {
         await reply(
-          `📊 *Insights IA — ${userName}*\n\n` +
-          `Aún no tenés análisis generados. Podés generarlos desde la app:\n👉 ${APP_URL}/insights\n\n` +
-          `También recibís un análisis automático cada lunes 🤖`
+          `ðŸ“Š *Insights IA â€” ${userName}*\n\n` +
+          `AÃºn no tenÃ©s anÃ¡lisis generados. PodÃ©s generarlos desde la app:\nðŸ‘‰ ${APP_URL}/insights\n\n` +
+          `TambiÃ©n recibÃ­s un anÃ¡lisis automÃ¡tico cada lunes ðŸ¤–`
         );
       } else {
-        const sevEmoji: Record<string, string> = { info: "💡", warn: "⚠️", critical: "🚨" };
+        const sevEmoji: Record<string, string> = { info: "ðŸ’¡", warn: "âš ï¸", critical: "ðŸš¨" };
         const lines = insights.map(ins =>
-          `${sevEmoji[ins.severity] ?? "💡"} *${ins.title}*\n${ins.detail}`
+          `${sevEmoji[ins.severity] ?? "ðŸ’¡"} *${ins.title}*\n${ins.detail}`
         ).join("\n\n");
         const date = new Date(insights[0].created_at).toLocaleDateString("es-UY");
         await reply(
-          `📊 *Tus últimos insights* (${date})\n\n${lines}\n\n` +
-          `_Ver análisis completo → ${APP_URL}/insights_`
+          `ðŸ“Š *Tus Ãºltimos insights* (${date})\n\n${lines}\n\n` +
+          `_Ver anÃ¡lisis completo â†’ ${APP_URL}/insights_`
         );
       }
       return NextResponse.json({ received: true });
     }
 
-    // ── ALERT_SETUP ───────────────────────────────────────────────────────────
+    // â”€â”€ ALERT_SETUP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "ALERT_SETUP") {
       const al = intent.alert_setup;
 
       if (!al?.type) {
         await reply(
-          `🔔 *Configurar alerta*\n\n¿Qué tipo de alerta querés?\n\n` +
-          `1️⃣ Límite de gasto (ej: "avisame si gasto más de X")\n` +
-          `2️⃣ Saldo bajo (ej: "alertame si mi saldo baja de X")\n` +
-          `3️⃣ Hito de meta (ej: "avisame cuando llegue al 50% de una meta")\n` +
-          `4️⃣ Resumen semanal (cada lunes por WhatsApp)\n` +
-          `5️⃣ Gasto inusual (cuando algo esté fuera de lo normal)\n\n` +
-          `Describílo con tus palabras y lo configuro 🤖`
+          `ðŸ”” *Configurar alerta*\n\nÂ¿QuÃ© tipo de alerta querÃ©s?\n\n` +
+          `1ï¸âƒ£ LÃ­mite de gasto (ej: "avisame si gasto mÃ¡s de X")\n` +
+          `2ï¸âƒ£ Saldo bajo (ej: "alertame si mi saldo baja de X")\n` +
+          `3ï¸âƒ£ Hito de meta (ej: "avisame cuando llegue al 50% de una meta")\n` +
+          `4ï¸âƒ£ Resumen semanal (cada lunes por WhatsApp)\n` +
+          `5ï¸âƒ£ Gasto inusual (cuando algo estÃ© fuera de lo normal)\n\n` +
+          `DescribÃ­lo con tus palabras y lo configuro ðŸ¤–`
         );
         return NextResponse.json({ received: true });
       }
@@ -1347,7 +1480,7 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       const catId = al.category ? await resolveCategoryId(userId!, al.category) : null;
 
       const typeLabels: Record<string, string> = {
-        spending_limit: "Límite de gasto",
+        spending_limit: "LÃ­mite de gasto",
         low_balance: "Saldo bajo",
         goal_milestone: "Hito de meta",
         weekly_summary: "Resumen semanal",
@@ -1355,11 +1488,11 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       };
 
       const buildAlertTitle = () => {
-        if (al.type === "spending_limit") return `Límite${al.category ? ` ${al.category}` : ""} ${al.period === "weekly" ? "semanal" : al.period === "daily" ? "diario" : "mensual"}`;
+        if (al.type === "spending_limit") return `LÃ­mite${al.category ? ` ${al.category}` : ""} ${al.period === "weekly" ? "semanal" : al.period === "daily" ? "diario" : "mensual"}`;
         if (al.type === "low_balance") return "Saldo bajo";
         if (al.type === "goal_milestone") return `Hito de meta al ${al.amount ?? 50}%`;
         if (al.type === "weekly_summary") return "Resumen semanal";
-        if (al.type === "unusual_spending") return `Gasto inusual${al.category ? ` — ${al.category}` : ""}`;
+        if (al.type === "unusual_spending") return `Gasto inusual${al.category ? ` â€” ${al.category}` : ""}`;
         return "Alerta";
       };
 
@@ -1378,34 +1511,34 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       const { error: alertErr } = await supabase.from("smart_alerts").insert(row);
 
       if (alertErr) {
-        await reply(`❌ No pude crear la alerta. Intentá desde la app: ${APP_URL}/alerts`);
+        await reply(`âŒ No pude crear la alerta. IntentÃ¡ desde la app: ${APP_URL}/alerts`);
       } else {
         const typeLabel = typeLabels[al.type] ?? al.type;
         const amtStr = al.amount ? ` de $${al.amount.toLocaleString("es-UY")}` : "";
-        const periodStr = al.period ? ` por ${al.period === "monthly" ? "mes" : al.period === "weekly" ? "semana" : "día"}` : "";
+        const periodStr = al.period ? ` por ${al.period === "monthly" ? "mes" : al.period === "weekly" ? "semana" : "dÃ­a"}` : "";
         const catStr = al.category ? ` en ${al.category}` : "";
         await reply(
-          `✅ *Alerta configurada*\n\n` +
-          `🔔 *${typeLabel}*${amtStr}${catStr}${periodStr}\n\n` +
+          `âœ… *Alerta configurada*\n\n` +
+          `ðŸ”” *${typeLabel}*${amtStr}${catStr}${periodStr}\n\n` +
           `Te voy a avisar por WhatsApp y en la app cuando se active.\n` +
-          `Podés verla y editarla en: ${APP_URL}/alerts`
+          `PodÃ©s verla y editarla en: ${APP_URL}/alerts`
         );
       }
       return NextResponse.json({ received: true });
     }
 
-    // ── SAVINGS_PLAN ──────────────────────────────────────────────────────────
+    // â”€â”€ SAVINGS_PLAN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "SAVINGS_PLAN") {
       const sp = intent.savings_plan;
 
       if (!sp?.name || !sp?.target_amount) {
         await reply(
-          `🎯 *Plan de ahorro*\n\n` +
+          `ðŸŽ¯ *Plan de ahorro*\n\n` +
           `Para crear tu meta de ahorro necesito saber:\n\n` +
-          `1. *¿Para qué querés ahorrar?* (ej: vacaciones, auto, fondo de emergencia)\n` +
-          `2. *¿Cuánto necesitás ahorrar?* (ej: 50000 UYU)\n` +
-          `3. *¿Para cuándo?* (opcional, ej: diciembre 2026)\n\n` +
-          `Podés decirme todo junto: _"Quiero ahorrar 80000 para vacaciones en julio"_`
+          `1. *Â¿Para quÃ© querÃ©s ahorrar?* (ej: vacaciones, auto, fondo de emergencia)\n` +
+          `2. *Â¿CuÃ¡nto necesitÃ¡s ahorrar?* (ej: 50000 UYU)\n` +
+          `3. *Â¿Para cuÃ¡ndo?* (opcional, ej: diciembre 2026)\n\n` +
+          `PodÃ©s decirme todo junto: _"Quiero ahorrar 80000 para vacaciones en julio"_`
         );
         return NextResponse.json({ received: true });
       }
@@ -1421,22 +1554,22 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       }).select().single();
 
       if (goalErr || !newGoal) {
-        await reply(`❌ No pude crear la meta. Intentá desde la app: ${APP_URL}/goals`);
+        await reply(`âŒ No pude crear la meta. IntentÃ¡ desde la app: ${APP_URL}/goals`);
       } else {
         const fmt = new Intl.NumberFormat("es-UY", { minimumFractionDigits: 0 }).format(sp.target_amount);
-        const dateStr = sp.target_date ? `\n📅 Fecha límite: ${new Date(sp.target_date).toLocaleDateString("es-UY")}` : "";
+        const dateStr = sp.target_date ? `\nðŸ“… Fecha lÃ­mite: ${new Date(sp.target_date).toLocaleDateString("es-UY")}` : "";
         await reply(
-          `🎯 *Meta de ahorro creada*\n\n` +
-          `✨ *${sp.name}*\n` +
-          `💵 ${goalCurrency} ${fmt}${dateStr}\n\n` +
-          `Podés ver el progreso y agregar aportes desde la app:\n👉 ${APP_URL}/goals\n\n` +
-          `¡Buena suerte! 💪`
+          `ðŸŽ¯ *Meta de ahorro creada*\n\n` +
+          `âœ¨ *${sp.name}*\n` +
+          `ðŸ’µ ${goalCurrency} ${fmt}${dateStr}\n\n` +
+          `PodÃ©s ver el progreso y agregar aportes desde la app:\nðŸ‘‰ ${APP_URL}/goals\n\n` +
+          `Â¡Buena suerte! ðŸ’ª`
         );
       }
       return NextResponse.json({ received: true });
     }
 
-    // ── SUPPORT_TICKET ────────────────────────────────────────────────────────
+    // â”€â”€ SUPPORT_TICKET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (intent.intent === "SUPPORT_TICKET") {
       const st = intent.support_ticket;
       const subject = st?.subject ?? "Consulta de soporte";
@@ -1461,24 +1594,18 @@ Si no es ticket: {"error":"not_a_receipt"}. Fecha hoy: ${today}.`;
       });
 
       await reply(
-        `🎫 *Ticket de soporte creado*\n\n` +
-        `📋 *${subject}*\n\n` +
+        `ðŸŽ« *Ticket de soporte creado*\n\n` +
+        `ðŸ“‹ *${subject}*\n\n` +
         `Recibimos tu consulta y te responderemos a la brevedad. ` +
-        `Cuando esté resuelto, te avisamos por acá mismo. 🙏\n\n` +
-        `Si es urgente, podés describirlo con más detalle y lo priorizamos.`
+        `Cuando estÃ© resuelto, te avisamos por acÃ¡ mismo. ðŸ™\n\n` +
+        `Si es urgente, podÃ©s describirlo con mÃ¡s detalle y lo priorizamos.`
       );
       return NextResponse.json({ received: true });
     }
 
-    // ── HELP / default ────────────────────────────────────────────────────────
-    // Let GPT generate a helpful response instead of a static message
-    const helpAnswer = await gpt(
-      `Sos FlowMind AI, asistente financiero personal de ${userName} en WhatsApp.
-Respondé de forma amigable y corta (máx 3 líneas) en español. No inventes datos financieros.
-Si el usuario pregunta algo que podés ayudar (cuentas, gastos, ingresos, presupuesto) explicá cómo.
-Si es algo fuera de tu alcance, decilo amablemente y recordá lo que sí podés hacer.`,
-      processedText
-    );
+    // â”€â”€ HELP / default â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Let GPT generate a helpful, scoped response instead of a static message.
+    const helpAnswer = await businessReply(userName, processedText, conversationMemory);
     await reply(helpAnswer, { intent: "HELP" });
 
     return NextResponse.json({ received: true });
@@ -1491,3 +1618,4 @@ Si es algo fuera de tu alcance, decilo amablemente y recordá lo que sí podés 
 export async function GET() {
   return NextResponse.json({ status: "ok" });
 }
+

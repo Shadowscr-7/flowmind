@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Suspense } from "react";
+import PageTracker from "@/components/PageTracker";
 import "./globals.css";
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
@@ -30,6 +32,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
+        <Suspense fallback={null}>
+          <PageTracker />
+        </Suspense>
         {children}
         {META_PIXEL_ID && (
           <>

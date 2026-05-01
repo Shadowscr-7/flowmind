@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash", "Bash(*)",
+      "Write", "Write(**)",
+      "Edit", "Edit(**)",
+      "MultiEdit", "MultiEdit(**)",
+      "Read", "Read(**)",
+      "Glob", "Grep",
+      "Write(**/.claude/**)", "Edit(**/.claude/**)",
+      "Write(**/.claude/runs/**)", "Edit(**/.claude/runs/**)",
+      "Write(.claude/**)", "Edit(.claude/**)",
+      "Write(.claude/runs/**)", "Edit(.claude/runs/**)",
+      "Bash(mkdir *)", "Bash(mkdir -p *)",
+      "Bash(npm *)", "Bash(node *)", "Bash(git *)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
+}

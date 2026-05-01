@@ -1,0 +1,22 @@
+bucket: bug-fix
+confidence: high
+multi_intent: false
+clarifying_questions: []
+touches:
+  ui: true
+  db: false
+  auth: true
+  api: false
+  infra: true
+size_estimate_loc: 100
+risk: low
+recommended_agents:
+  implementer: sonnet
+summary: >
+  Two related bugs in Supabase email confirmation flow:
+  (1) Confirmation email has no branded design - needs HTML template matching flowmind.aivanguardlabs.com aesthetic.
+  (2) config.toml site_url is localhost:3000, causing confirmation links to redirect to local dev instead of production.
+  Fix: create Supabase email template HTML + update config.toml site_url.
+affected_files:
+  - backend/supabase/config.toml
+  - backend/supabase/email-templates/confirm-signup.html (new)

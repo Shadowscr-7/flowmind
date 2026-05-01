@@ -1,4 +1,4 @@
-/**
+﻿/**
  * POST /api/insights/generate
  * On-demand AI insights generation (called from the web Insights page)
  * Reuses the same analysis logic as the weekly cron
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   let totalIncome = 0, totalExpenses = 0;
 
   for (const tx of txs ?? []) {
-    const catName = (tx.categories as unknown as { name: string } | null)?.name ?? "Sin categoría";
+    const catName = (tx.categories as unknown as { name: string } | null)?.name ?? "Sin categorÃ­a";
     if (tx.type === "expense") {
       catSpend[catName] = (catSpend[catName] ?? 0) + Number(tx.amount);
       totalExpenses += Number(tx.amount);
@@ -104,12 +104,15 @@ export async function POST(req: NextRequest) {
   }));
 
   // GPT analysis
-  const system = `Sos un asesor financiero personal experto. Analizás los datos financieros del usuario y generás insights accionables, personalizados y en español rioplatense.
+  const system = `Sos un asesor financiero personal experto. AnalizÃ¡s los datos financieros del usuario y generÃ¡s insights accionables, personalizados y en espaÃ±ol rioplatense.
 
-Generá entre 4 y 6 insights variados y específicos. Tipos: spend_change, anomaly, suggestion, forecast, summary, trend.
-Severidades: info (neutral/bueno), warn (atención), critical (problema urgente).
+GenerÃ¡ entre 4 y 6 insights variados y especÃ­ficos. Tipos: spend_change, anomaly, suggestion, forecast, summary, trend.
+Severidades: info (neutral/bueno), warn (atenciÃ³n), critical (problema urgente).
+Tono: humano, directo y util; nada generico. Cada insight debe mencionar un dato real del contexto y una accion concreta.
+No des asesoramiento financiero regulado ni prometas resultados. Si faltan datos, pedi el proximo dato util como recomendacion.
+Usa metas, presupuestos, saldos y tendencia de gasto para sugerir ahorro realista, alertas o ajustes de habitos.
 
-Respondé SOLO JSON:
+RespondÃ© SOLO JSON:
 {
   "insights": [
     { "kind": "...", "title": "...", "detail": "...", "severity": "info|warn|critical" }
@@ -126,7 +129,7 @@ Respondé SOLO JSON:
   }
 }`;
 
-  const userMsg = `Usuario: ${userName} | Período: ${periodStart} al ${periodEnd}
+  const userMsg = `Usuario: ${userName} | PerÃ­odo: ${periodStart} al ${periodEnd}
 Saldo total: ${currency} ${totalBalance.toLocaleString("es-UY")}
 Ingresos: ${currency} ${totalIncome.toLocaleString("es-UY")}
 Gastos: ${currency} ${totalExpenses.toLocaleString("es-UY")}
@@ -134,7 +137,7 @@ Neto: ${currency} ${(totalIncome - totalExpenses).toLocaleString("es-UY")}
 Burn diario: ${currency} ${dailyBurn.toFixed(0)}
 Transacciones: ${(txs ?? []).length}
 
-Top categorías de gasto:
+Top categorÃ­as de gasto:
 ${topCategories.map(c => `- ${c.name}: ${currency} ${c.amount.toLocaleString("es-UY")}`).join("\n") || "Sin gastos registrados"}
 
 Presupuestos:

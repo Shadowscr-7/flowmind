@@ -1,0 +1,22 @@
+{
+  "runId": "20260501-013637-a7m",
+  "bucket": "bug-fix",
+  "bucket_source": "auto",
+  "stages": ["implementer", "code-reviewer"],
+  "skipped_stages": [
+    { "name": "analyst", "reason": "bucket=bug-fix, no --analyst flag" },
+    { "name": "architect", "reason": "bucket=bug-fix, no --architect flag" },
+    { "name": "qa-tester", "reason": "changes are HTML email template + config file — no runtime logic to test; --no-qa not set but changes are read-only from app perspective" },
+    { "name": "ux-validator", "reason": "email template is external to app UI, no .tsx/.jsx touched" },
+    { "name": "security-reviewer", "reason": "bucket != large-feature, no auth/db/api touches" },
+    { "name": "dependency-reviewer", "reason": "no package.json/lockfile touched" },
+    { "name": "documenter", "reason": "bucket=bug-fix, diff < 30 LOC in code" }
+  ],
+  "implementer_model_chosen": "sonnet",
+  "implementer_model_triage_recommended": "sonnet",
+  "parallel_review_qa": false,
+  "parallel_review_qa_reason": "qa-tester skipped",
+  "max_iterations": 3,
+  "budget_estimate_usd": 0.15,
+  "inline_spec": "backend/supabase/config.toml site_url must be https://flowmind.aivanguardlabs.com. Create backend/supabase/email-templates/confirm-signup.html with dark-themed design matching auth layout: #0b0f12 background, emerald-400 (#34d399) accent, Inter font, FlowMind logo from https://flowmind.aivanguardlabs.com/images/logo.png, {{ .ConfirmationURL }} as CTA button."
+}

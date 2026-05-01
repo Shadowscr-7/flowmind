@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Cron: Weekly AI Financial Insights
  * Runs every Monday at 9am (configured in vercel.json)
  * Analyzes each user's finances with GPT and sends WhatsApp summary
@@ -43,7 +43,7 @@ async function sendWA(phone: string, text: string) {
   } catch { /* non-blocking */ }
 }
 
-// ─── Build financial context for a user ──────────────────────────────────────
+// â”€â”€â”€ Build financial context for a user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function buildUserContext(userId: string, currency: string) {
   const supabase = db();
   const today = new Date();
@@ -77,7 +77,7 @@ async function buildUserContext(userId: string, currency: string) {
   let monthIncome = 0, monthExpenses = 0, weekExpenses = 0;
 
   for (const tx of recentTxs ?? []) {
-    const catName = (tx.categories as unknown as { name: string } | null)?.name ?? "Sin categoría";
+    const catName = (tx.categories as unknown as { name: string } | null)?.name ?? "Sin categorÃ­a";
     if (tx.type === "expense") {
       catSpend[catName] = (catSpend[catName] ?? 0) + Number(tx.amount);
       if (tx.date >= monthStart) monthExpenses += Number(tx.amount);
@@ -123,27 +123,30 @@ async function buildUserContext(userId: string, currency: string) {
   };
 }
 
-// ─── Generate insights via GPT ────────────────────────────────────────────────
+// â”€â”€â”€ Generate insights via GPT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type UserContext = Awaited<ReturnType<typeof buildUserContext>>;
 async function generateInsights(ctx: UserContext, userName: string) {
-  const system = `Sos un asesor financiero personal experto. Analizás los datos financieros del usuario y generás insights accionables, personalizados y en español rioplatense.
+  const system = `Sos un asesor financiero personal experto. AnalizÃ¡s los datos financieros del usuario y generÃ¡s insights accionables, personalizados y en espaÃ±ol rioplatense.
 
-Generá entre 3 y 5 insights variados. Deben ser específicos, concretos y útiles.
+GenerÃ¡ entre 3 y 5 insights variados. Deben ser especÃ­ficos, concretos y Ãºtiles.
 Tipos disponibles: spend_change, anomaly, suggestion, forecast, summary, trend
 
-Severidades: info (neutral/bueno), warn (atención), critical (problema real)
+Severidades: info (neutral/bueno), warn (atenciÃ³n), critical (problema real)
+Tono: humano, breve y concreto; nada generico. Cada insight debe apoyarse en un dato real del contexto y proponer una accion.
+Usa metas, presupuestos y saldo para detectar oportunidades de ahorro o alertas inteligentes.
+No des asesoramiento financiero regulado ni prometas resultados.
 
-Respondé SOLO JSON:
+RespondÃ© SOLO JSON:
 {
   "insights": [
     {
       "kind": "suggestion|spend_change|anomaly|forecast|summary|trend",
-      "title": "título corto (<60 chars)",
-      "detail": "explicación accionable (2-3 oraciones max)",
+      "title": "tÃ­tulo corto (<60 chars)",
+      "detail": "explicaciÃ³n accionable (2-3 oraciones max)",
       "severity": "info|warn|critical"
     }
   ],
-  "whatsapp_summary": "mensaje conciso para WhatsApp (máx 400 chars, usa emojis, incluye los 2 insights más importantes)"
+  "whatsapp_summary": "mensaje conciso para WhatsApp (mÃ¡x 400 chars, usa emojis, incluye los 2 insights mÃ¡s importantes)"
 }`;
 
   const user = `Usuario: ${userName}
@@ -153,7 +156,7 @@ Gastos del mes: ${ctx.currency} ${ctx.monthExpenses.toLocaleString("es-UY")}
 Gastos esta semana: ${ctx.currency} ${ctx.weekExpenses.toLocaleString("es-UY")}
 Neto del mes: ${ctx.currency} ${ctx.netMonth.toLocaleString("es-UY")}
 
-Top categorías (30 días):
+Top categorÃ­as (30 dÃ­as):
 ${ctx.topCategories.map(c => `- ${c.name}: ${ctx.currency} ${c.amount.toLocaleString("es-UY")}`).join("\n")}
 
 Presupuestos:
@@ -174,7 +177,7 @@ ${ctx.goalStatus.length ? ctx.goalStatus.map(g => `- ${g.name}: ${g.pct}% (${g.c
   }
 }
 
-// ─── Process a single user ────────────────────────────────────────────────────
+// â”€â”€â”€ Process a single user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function processUser(profile: {
   id: string;
   display_name: string | null;
@@ -217,7 +220,7 @@ async function processUser(profile: {
     // Send WhatsApp summary if user has phone linked
     if (profile.whatsapp_phone && whatsappSummary) {
       const fmt = new Intl.DateTimeFormat("es-UY", { day: "numeric", month: "short" }).format(today);
-      const msg = `📊 *Resumen semanal FlowMind* — ${fmt}\n\n${whatsappSummary}\n\n_Ver análisis completo en la app →_`;
+      const msg = `ðŸ“Š *Resumen semanal FlowMind* â€” ${fmt}\n\n${whatsappSummary}\n\n_Ver anÃ¡lisis completo en la app â†’_`;
       await sendWA(profile.whatsapp_phone, msg);
       await supabase.from("ai_insights").update({ whatsapp_sent: true })
         .eq("user_id", profile.id).eq("period_end", periodEnd).eq("source", "cron_weekly");
@@ -227,7 +230,7 @@ async function processUser(profile: {
   }
 }
 
-// ─── Main handler ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function GET(req: NextRequest) {
   const secret = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
   if (!secret || secret !== CRON_SECRET) {

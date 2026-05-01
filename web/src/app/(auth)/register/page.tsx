@@ -13,6 +13,7 @@ import { Check, Crown, Loader2, Sparkles, Zap } from "lucide-react";
 type Step = "auth" | "phone" | "plan";
 type Plan = "free" | "monthly" | "annual";
 type PaidPlan = Exclude<Plan, "free">;
+type SignupSource = "email" | "google";
 
 const COUNTRY_CODES = [
   { code: "+598", label: "Uruguay +598", flag: "UY" },
@@ -61,6 +62,7 @@ export default function RegisterPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [paypalLoading, setPaypalLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signupNotificationSentRef = useRef(false);
 
   const paypalContainerRef = useRef<HTMLDivElement>(null);
   const paypalButtonsRef = useRef<{ close: () => void } | null>(null);
@@ -69,6 +71,8 @@ export default function RegisterPage() {
     const params = new URLSearchParams(window.location.search);
     const plan = params.get("plan");
     const requestedStep = params.get("step");
+    const requestedPlan = plan === "free" || plan === "monthly" || plan === "annual" ? plan : "annual";
+    const isRegistrationReturn = requestedStep === "phone" || params.has("code");
     if (plan === "free" || plan === "monthly" || plan === "annual") setSelectedPlan(plan);
 
     createClient().auth.getUser().then(({ data }) => {
@@ -76,6 +80,7 @@ export default function RegisterPage() {
       setUserId(data.user.id);
       setDisplayName(data.user.user_metadata?.full_name ?? data.user.email?.split("@")[0] ?? "");
       setEmail(data.user.email ?? "");
+      if (isRegistrationReturn) void notifyNewSignup(data.user.id, requestedPlan, "google");
       setStep(requestedStep === "phone" ? "phone" : "plan");
     });
   }, []);
@@ -178,6 +183,7 @@ export default function RegisterPage() {
     }
 
     setUserId(data.user.id);
+    void notifyNewSignup(data.user.id, selectedPlan, "email");
     setStep("phone");
     setLoading(false);
   }
@@ -204,6 +210,32 @@ export default function RegisterPage() {
 
     setLoading(false);
     setStep("plan");
+  }
+
+  async function notifyNewSignup(id: string, plan: Plan, source: SignupSource) {
+    if (signupNotificationSentRef.current) return;
+
+    const storageKey = `flowmind-signup-notified:${id}`;
+    if (typeof window !== "undefined" && window.localStorage.getItem(storageKey)) return;
+
+    signupNotificationSentRef.current = true;
+    try {
+      const res = await fetch("/api/notifications/new-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: normalizedPhone(),
+          plan: PLAN_LABELS[plan],
+          source,
+        }),
+      });
+      if (res.ok && typeof window !== "undefined") {
+        window.localStorage.setItem(storageKey, "1");
+      }
+    } catch (err) {
+      signupNotificationSentRef.current = false;
+      console.warn("Signup notification failed", err);
+    }
   }
 
   async function activateFree() {

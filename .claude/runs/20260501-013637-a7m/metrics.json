@@ -1,0 +1,66 @@
+{
+  "runId": "20260501-013637-a7m",
+  "timestamp_start": "2026-05-01T01:36:37Z",
+  "timestamp_end": "2026-05-01T01:39:10Z",
+  "duration_seconds": 213,
+  "repo": "E:\\Proyectos\\flowmind",
+  "request": {
+    "raw": "mirando el proyecto flowmind el mail de supabase de confirmacion de correo esta mal, primero que el diseno esta espantoso... tendria que tener el diseno de la web https://flowmind.aivanguardlabs.com/ y lo otro es que, al darle confirmar manda a cualquier lado localhost:3000",
+    "quality": "bueno",
+    "enriched": false,
+    "flags": []
+  },
+  "triage": {
+    "bucket": "bug-fix",
+    "confidence": "high",
+    "touches": { "ui": true, "db": false, "auth": true, "api": false, "infra": true },
+    "size_estimate_loc": 100,
+    "risk": "low"
+  },
+  "stages": [
+    {
+      "name": "triage",
+      "model": "sonnet (inline)",
+      "skipped": false,
+      "tokens_in": 800,
+      "tokens_out": 200,
+      "duration_seconds": 53,
+      "verdict": "bug-fix"
+    },
+    {
+      "name": "implementer",
+      "model": "sonnet (inline)",
+      "iterations": [
+        { "n": 1, "tokens_in": 3000, "tokens_out": 2500, "duration_seconds": 90, "verdict": "delivered" }
+      ]
+    },
+    {
+      "name": "code-reviewer",
+      "model": "sonnet (inline)",
+      "iterations": [
+        { "n": 1, "tokens_in": 2000, "tokens_out": 400, "duration_seconds": 40, "verdict": "APPROVED" }
+      ]
+    }
+  ],
+  "arbiter_invocations": 0,
+  "totals": {
+    "tokens_in": 5800,
+    "tokens_out": 3100,
+    "estimated_usd": 0.06,
+    "iterations_total": 1,
+    "stages_run": 3,
+    "stages_skipped": 7,
+    "skip_savings_estimated_usd": 0.25
+  },
+  "verdict_final": "MERGE_READY",
+  "files_changed": [
+    "backend/supabase/config.toml",
+    "backend/supabase/email-templates/confirm-signup.html"
+  ],
+  "loc_changed": 105,
+  "cache": {
+    "preamble_tokens": 0,
+    "stages_with_cache_hit_estimated": 0,
+    "cache_savings_estimated_usd": 0
+  }
+}
